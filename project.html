@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rental Market Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script> <!-- 用來解析 CSV -->
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      margin: 0;
+      font-family: Arial, sans-serif;
+    }
+
+    #filter {
+      padding: 10px;
+      background-color: #f4f4f4;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+    }
+
+    #content {
+      display: flex;
+      flex: 1;
+    }
+
+    #map {
+      height: 100%;
+      width: 70%;
+    }
+
+    #info {
+      width: 30%;
+      padding: 20px;
+      background-color: #f9f9f9;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      overflow-y: auto;
+    }
+
+    .info-section {
+      margin-bottom: 15px;
+      font-size: 16px;
+    }
+
+    .info-section span {
+      display: block;
+      margin: 5px 0;
+    }
+
+    .info-section strong {
+      font-weight: bold;
+    }
+
+    .info-section .yes {
+      color: green;
+      font-weight: bold;
+    }
+
+    .info-section .no {
+      color: gray;
+    }
+
+    .mls-list {
+      margin: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .mls-item {
+      padding: 10px;
+      background-color: #e0e0e0;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+
+    .data-row {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 10px;
+      background-color: #ddd;
+      margin-top: 5px;
+      border-radius: 5px;
+    }
+
+    .progress-bar .fill {
+      height: 100%;
+      border-radius: 5px;
+    }
+
+    /* Add these styles to your existing <style> section */
+    .mls-list {
+      margin: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: flex-start;
+    }
+
+    .mls-item {
+      padding: 8px 12px;
+      background-color: #e0e0e0;
+      cursor: pointer;
+      border-radius: 4px;
+      min-width: 80px;
+      text-align: center;
+      transition: all 0.2s ease;
+    }
+
+    .mls-item:hover {
+      background-color: #d0d0d0;
+    }
+
+    .mls-item.selected {
+      background-color: #303030;
+      color: white;
+      font-weight: bold;
+    }
+
+    /* Comparison feature styles */
+    .compare-container {
+      margin-top: 15px;
+      border-top: 1px solid #ddd;
+      padding-top: 15px;
+    }
+
+    .compare-title {
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+
+    .compare-selection {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .compare-item {
+      background-color: #3498db;
+      color: white;
+      padding: 5px 8px;
+      border-radius: 4px;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+    }
+
+    .compare-remove {
+      margin-left: 5px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .compare-input {
+      display: flex;
+      gap: 8px;
+    }
+
+    .compare-input input {
+      flex-grow: 1;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+
+    .compare-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .compare-button {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .compare-button.clear {
+      background-color: #e74c3c;
+    }
+
+    .compare-button:disabled {
+      background-color: #95a5a6;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Replace the existing filter div with this code -->
+  <div id="filter">
+    <h3>Filters</h3>
+    <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start;">
+      <!-- Price Range -->
+      <div style="flex: 1; min-width: 200px;">
+        <label for="price-range">Price Range (up to <span id="price-display">$2000</span>)</label>
+        <input type="range" id="price-range" min="0" max="10000" value="2000" style="width: 100%;">
+      </div>
+      
+      <!-- Move In Day -->
+      <div style="flex: 1; min-width: 200px;">
+        <label for="move-in-day">List Date <span id="move-in-display">30 days</span></label>
+        <input type="range" id="move-in-day" min="0" max="90" value="30" style="width: 100%;">
+      </div>
+      
+      <!-- Bedrooms -->
+      <div style="flex: 1; min-width: 200px;">
+        <label for="bedrooms">Min Bedrooms</label>
+        <input type="number" id="bedrooms" placeholder="Bedrooms" value="2" min="1" max="10" style="width: 100%;">
+      </div>
+      
+      <!-- Square Feet -->
+      <div style="flex: 1; min-width: 200px;">
+        <label for="sf">Min SF (Square Feet)</label>
+        <input type="number" id="sf" placeholder="Square Feet" value="1000" min="0" style="width: 100%;">
+      </div>
+    </div>
+    
+    <div style="display: flex; flex-wrap: wrap; gap: 40px; margin-top: 20px; align-items: center;">
+      <!-- Checkboxes -->
+      <div style="display: flex; gap: 40px;">
+        <div>
+          <input type="checkbox" id="pool">
+          <label for="pool">Pool</label>
+        </div>
+        
+        <div>
+          <input type="checkbox" id="waterfront">
+          <label for="waterfront">Waterfront</label>
+        </div>
+        
+        <div>
+          <input type="checkbox" id="pet-allowed">
+          <label for="pet-allowed">Pet Allowed</label>
+        </div>
+      </div>
+      
+      <!-- Apply Filters Button -->
+      <div style="margin-left: auto;">
+        <button id="apply-filters" style="background-color: #3498db; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Apply Filters</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="content">
+    <!-- 地圖 -->
+    <div id="map"></div>
+
+    <!-- 資訊欄 -->
+    <div id="info">
+      <h3>MLS Property Details</h3>
+      
+      <!-- 顯示資料 -->
+      <div id="mls-details">
+        <div class="info-section data-row">
+          <strong>MLS#:</strong> <span id="mls"> - </span>
+        </div>
+        <div class="info-section data-row">
+          <strong>Original List Price:</strong> <span id="original-price">$ - </span>
+        </div>
+        <div class="info-section data-row">
+          <strong>Last List Price:</strong> <span id="last-price">$ - </span>
+        </div>
+        <div class="info-section data-row">
+          <strong>Percentage Change:</strong> <span id="percentage-change">0.0%</span>
+        </div>
+        
+        <hr>
+
+        <!-- 顯示 Year Built 和 Square Footage -->
+        <div class="info-section data-row">
+          <strong>Year Built:</strong> <span id="year-built"> - </span>
+          <div class="progress-bar">
+            <div id="year-built-range" class="fill" style="width: 50%; background-color: #4CAF50;"></div>
+          </div>
+        </div>
+        <div class="info-section data-row">
+          <strong>Square Footage:</strong> <span id="sf-value"> - SF</span>
+          <div class="progress-bar">
+            <div id="sf-range" class="fill" style="width: 50%; background-color: #FF9800;"></div>
+          </div>
+        </div>
+
+        <hr>
+
+        <!-- 顯示 Pool, Waterfront, Pet allowed -->
+        <div class="info-section data-row">
+          <strong>Pool:</strong> <span id="pool-value" class="yes"> - </span>
+        </div>
+        <div class="info-section data-row">
+          <strong>Waterfront:</strong> <span id="waterfront-value" class="yes"> - </span>
+        </div>
+        <div class="info-section data-row">
+          <strong>Pet Allowed:</strong> <span id="pet-allowed-value" class="no"> - </span>
+        </div>
+
+        <hr>
+
+        <!-- 顯示 GAR 和 BE -->
+        <div class="info-section data-row">
+          <strong>GAR:</strong> <span id="gar"> - </span>
+        </div>
+        <div class="info-section data-row">
+          <strong>BE:</strong> <span id="be"> - </span>
+        </div>
+        <div class="info-section data-row">
+          <strong>BA:</strong> <span id="ba"> - </span>
+        </div>
+
+        <hr>
+
+        <!-- 顯示 Similar MLS -->
+        <div class="info-section data-row">
+          <strong>Similar:</strong> <span id="similar-mls">None</span>
+        </div>
+
+        <hr>
+
+        <!-- 顯示 Compare -->
+        <!-- <div class="info-section data-row">
+          <strong>Compare:</strong> You can compare properties by clicking on the map or selecting from Similar MLS properties.
+        </div> -->
+
+        <!-- Comparison Feature -->
+        <div class="compare-container">
+          <div class="compare-title">Compare Properties</div>
+          
+          <div class="compare-selection" id="compare-selection">
+            <!-- Selected MLS numbers will appear here -->
+          </div>
+          
+          <div class="compare-input">
+            <input type="text" id="compare-mls-input" placeholder="Enter MLS# to compare">
+            <button id="add-to-compare" class="compare-button">Add</button>
+          </div>
+          
+          <div class="compare-buttons">
+            <button id="start-compare" class="compare-button" disabled>Compare Selected</button>
+            <button id="clear-compare" class="compare-button clear" disabled>Clear All</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mls-list" id="mls-list"></div>
+
+  <script>
+    let maxYearBuilt = 0;
+    let minYearBuilt = Infinity;
+    let maxSquareFootage = 0;
+    let minSquareFootage = Infinity;
+    let allData = [];
+    let map;
+    let markerGroup;
+  
+    // 初始化地圖 - 修正：移到這裡以確保全局變數正確初始化
+    map = L.map('map').setView([25.7617, -80.1918], 12);  // 設定地圖中心為邁阿密
+  
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+  
+    markerGroup = L.layerGroup().addTo(map);
+  
+    // 讀取並解析 CSV 檔案
+    Papa.parse("Rental Market Research Data.csv", {
+      download: true,
+      header: true,
+      dynamicTyping: false,
+      complete: function(results) {
+        const data = results.data;
+        allData = results.data.filter(item => item['MLS#']);
+        
+        let maxPrice = 0;
+        let maxListDate = null;
+        let today = new Date();
+
+        allData.forEach(item => {
+          // 處理價格最大值
+          if (item['Last List Price']) {
+            let price;
+            if (typeof item['Last List Price'] === 'string') {
+              price = parseFloat(item['Last List Price'].replace(/[^\d.]/g, ''));
+            } else {
+              price = parseFloat(item['Last List Price']);
+            }
+            
+            if (!isNaN(price)) {
+              maxPrice = Math.max(maxPrice, price);
+            }
+          }
+          
+          // 處理列表日期，計算最大日期差
+          if (item['List Date']) {
+            const dateStr = item['List Date'];
+            const dateParts = dateStr.split('/');
+            if (dateParts.length === 3) {
+              // 格式為 MM/DD/YYYY
+              const listDate = new Date(
+                parseInt(dateParts[2]), 
+                parseInt(dateParts[0]) - 1, 
+                parseInt(dateParts[1])
+              );
+              
+              if (!isNaN(listDate.getTime())) {
+                // 計算日期與今天的差值（天數）
+                const diffTime = Math.abs(today - listDate);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                if (maxListDate === null || diffDays > maxListDate) {
+                  maxListDate = diffDays;
+                }
+              }
+            }
+          }
+        });
+
+        // 設置價格滑塊的最大值為實際最大價格
+        const priceSlider = document.getElementById('price-range');
+        priceSlider.max = maxPrice;
+        priceSlider.value = 2600; // 預設顯示全部價格範圍
+        
+        // 設置入住天數滑塊的最大值為實際最大天數，但至少為90天
+        const moveInSlider = document.getElementById('move-in-day');
+        moveInSlider.max = Math.max(maxListDate || 2000, 2000);
+        moveInSlider.value = 2000; // 預設顯示全部日期範圍
+        
+        // 更新顯示的數值
+        updateFilterDisplay();
+            
+        // Initialize SF input with a reasonable default
+        document.getElementById('sf').value = 1000;
+  
+        // Apply initial filters to show some data
+        applyFilters();
+      }
+    });
+  
+    // 根據選中的 MLS# 更新右側的詳細資料
+    function updateInfo(item) {
+      if (!item) return;
+      
+      document.getElementById('mls').textContent = item['MLS#'] || 'N/A';
+      document.getElementById('original-price').textContent = item['Original List Price'] ? `$${item['Original List Price']}` : 'N/A';
+      document.getElementById('last-price').textContent = item['Last List Price'] ? `$${item['Last List Price']}` : 'N/A';
+      document.getElementById('percentage-change').textContent = item['Percentage Change'] ? `${item['Percentage Change']}%` : 'N/A';
+      document.getElementById('year-built').textContent = item['Year Built'] || 'N/A';
+      document.getElementById('sf-value').textContent = item['SF'] ? `${item['SF']} SF` : 'N/A';
+      
+      // Year Built 和 SF 的範圍顯示 - 修正：計算並應用百分比
+      if (item['Year Built'] && !isNaN(item['Year Built'])) {
+        const yearBuiltPercentage = calculateRange(item['Year Built'], 'Year Built');
+        document.getElementById('year-built-range').style.width = yearBuiltPercentage;
+      }
+      
+      if (item['SF'] && !isNaN(item['SF'])) {
+        const sfPercentage = calculateRange(item['SF'], 'Square Footage');
+        document.getElementById('sf-range').style.width = sfPercentage;
+      }
+  
+      // 根據 "Yes" / "No" 字符串來設定 Pool, Waterfront, Pets Allowed
+      document.getElementById('pool-value').textContent = item['Pool'] === "Yes" ? 'Yes' : 'No';
+      document.getElementById('pool-value').className = item['Pool'] === "Yes" ? 'yes' : 'no';
+      
+      document.getElementById('waterfront-value').textContent = item['Waterfront'] === "Yes" ? 'Yes' : 'No';
+      document.getElementById('waterfront-value').className = item['Waterfront'] === "Yes" ? 'yes' : 'no';
+      
+      document.getElementById('pet-allowed-value').textContent = item['Pets Allowed'] === "Yes" ? 'Yes' : 'No';
+      document.getElementById('pet-allowed-value').className = item['Pets Allowed'] === "Yes" ? 'yes' : 'no';
+  
+      document.getElementById('gar').textContent = item['GAR'] || 'N/A';
+      document.getElementById('be').textContent = item['BE'] || 'N/A';
+      document.getElementById('ba').textContent = item['BA'] || 'N/A';
+
+      // 尋找相似物業 - 使用 requestAnimationFrame 避免阻塞 UI
+      requestAnimationFrame(() => {
+        // 顯示計算中的提示
+        document.getElementById('similar-mls').textContent = "計算中...";
+        
+        // 使用 setTimeout 將計算推遲到下一個事件循環
+        setTimeout(() => {
+          const similarProperties = findSimilarProperties(item, allData);
+
+          // 顯示相似物業 MLS 號碼
+          if (similarProperties.length > 0) {
+            // Create a container div with flex display like the MLS list
+            const similarContainer = document.createElement('div');
+            similarContainer.style.display = 'flex';
+            similarContainer.style.flexWrap = 'wrap';
+            similarContainer.style.gap = '8px';
+            similarContainer.style.marginTop = '8px';
+            
+            // Add similar properties as boxes
+            similarProperties.forEach(p => {
+              const similarItemDiv = document.createElement('div');
+              similarItemDiv.className = 'mls-item similar-mls-item';
+              similarItemDiv.dataset.mls = p.property['MLS#'];
+              similarItemDiv.textContent = p.property['MLS#'];
+              
+              // Style the similar MLS items like the MLS list items
+              similarItemDiv.style.backgroundColor = '#e0e0e0';
+              similarItemDiv.style.padding = '6px 10px';
+              similarItemDiv.style.borderRadius = '4px';
+              similarItemDiv.style.cursor = 'pointer';
+              similarItemDiv.style.fontSize = '14px';
+              
+              // Add tooltip with similarity score
+              const scorePct = p.score.toFixed(0);
+              similarItemDiv.title = `相似度: ${scorePct}%`;
+              
+              // Add click handler
+              similarItemDiv.addEventListener('click', () => {
+                // 查找對應的物業
+                const mlsId = p.property['MLS#'];
+                const property = allData.find(prop => prop['MLS#'] === mlsId);
+                
+                if (property) {
+                  // 更新資訊面板
+                  updateInfo(property);
+                  
+                  // 查找和高亮對應的標記
+                  if (markerGroup) {
+                    markerGroup.getLayers().forEach(marker => {
+                      if (marker._mlsId === mlsId) {
+                        // 觸發標記的點擊事件
+                        marker.fire('click');
+                      }
+                    });
+                  }
+                  
+                  // 高亮 MLS 列表中的對應項
+                  highlightMLSItem(mlsId);
+                }
+              });
+              
+              similarContainer.appendChild(similarItemDiv);
+            });
+            
+            // Replace the content with our new container
+            const similarMlsElement = document.getElementById('similar-mls');
+            similarMlsElement.innerHTML = '';
+            similarMlsElement.appendChild(similarContainer);
+          } else {
+            document.getElementById('similar-mls').textContent = "無相似物業";
+          }
+        }, 0);
+      });
+      
+    }
+  
+    // 計算並返回範圍位置百分比 - 維持不變，只回傳百分比字串
+    function calculateRange(value, field) {
+      // 使用動態計算的最大最小值
+      const maxValues = {
+        'Year Built': maxYearBuilt,
+        'Square Footage': maxSquareFootage
+      };
+      const minValues = {
+        'Year Built': minYearBuilt,
+        'Square Footage': minSquareFootage
+      };
+  
+      const max = maxValues[field];
+      const min = minValues[field];
+      return ((value - min) / (max - min) * 100).toFixed(2) + '%';
+    }
+
+    function applyFilters() {
+      // 獲取篩選值
+      const maxPrice = parseFloat(document.getElementById('price-range').value);
+      const maxMoveInDays = parseInt(document.getElementById('move-in-day').value);
+      const minBedrooms = parseInt(document.getElementById('bedrooms').value);
+      const minSf = parseInt(document.getElementById('sf').value);
+      const poolRequired = document.getElementById('pool').checked;
+      const waterfrontRequired = document.getElementById('waterfront').checked;
+      const petAllowedRequired = document.getElementById('pet-allowed').checked;
+      
+      console.log(`篩選條件: 價格 <= ${maxPrice}, 入住天數 <= ${maxMoveInDays}, 臥室 >= ${minBedrooms}, 平方英尺 >= ${minSf}`);
+      
+      // 計算今天的日期，用於比較 List Date
+      const today = new Date();
+      
+      // 篩選數據
+      const filteredData = allData.filter(item => {
+        if (!item || !item['MLS#']) {
+          return false;
+        }
+        
+      // 1. 價格篩選 - 保持不變
+        let price = null;
+        if (item['Last List Price']) {
+          if (typeof item['Last List Price'] === 'string') {
+            price = parseFloat(item['Last List Price'].replace(/[^0-9.]/g, ''));
+          } else {
+            price = parseFloat(item['Last List Price']);
+          }
+        }
+        
+        if (isNaN(price) || price > maxPrice) {
+          return false;
+        }
+        
+        // 新增: 處理 List Date 篩選
+        if (maxMoveInDays > 0 && item['List Date']) {
+          const dateStr = item['List Date'];
+          const dateParts = dateStr.split('/');
+          if (dateParts.length === 3) {
+            // 格式為 MM/DD/YYYY
+            const listDate = new Date(
+              parseInt(dateParts[2]), 
+              parseInt(dateParts[0]) - 1, 
+              parseInt(dateParts[1])
+            );
+            
+            if (!isNaN(listDate.getTime())) {
+              // 計算日期與今天的差值（天數）
+              const diffTime = Math.abs(today - listDate);
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              
+              // 如果列表日期超過指定天數，過濾掉
+              if (diffDays > maxMoveInDays) {
+                return false;
+              }
+            }
+          }
+        }
+      // 2. 臥室數篩選 - 增強型處理
+      let bedrooms = null;
+      if (item['BE']) {
+        bedrooms = parseInt(item['BE']);
+      }
+      
+      if (isNaN(bedrooms) || bedrooms < minBedrooms) {
+        return false;
+      }
+      
+      // 3. 平方英尺篩選 - 增強型處理
+      let squareFeet = null;
+      if (item['SF']) {
+        if (typeof item['SF'] === 'string') {
+          squareFeet = parseFloat(item['SF'].replace(/[^0-9.]/g, ''));
+        } else {
+          squareFeet = parseFloat(item['SF']);
+        }
+      }
+      
+      if (isNaN(squareFeet) || squareFeet < minSf) {
+        return false;
+      }
+      
+      // 4. 入住日期篩選 - 更彈性的處理
+      // 注意：移除了入住日期篩選，讓用戶先看到資料
+      // 您可以根據需要重新添加此條件
+      
+      // 5. 特殊功能篩選
+      if (poolRequired && item['Pool'] !== "Yes") {
+        return false;
+      }
+      
+      if (waterfrontRequired && item['Waterfront'] !== "Yes") {
+        return false;
+      }
+      
+      if (petAllowedRequired && item['Pets Allowed'] !== "Yes") {
+        return false;
+      }
+      
+      // 通過所有篩選條件
+      return true;
+    });
+    
+    console.log(`篩選後剩餘 ${filteredData.length} 條資料`);
+    
+    // 更新顯示
+    updateMapMarkers(filteredData);
+    updateMLSList(filteredData);
+    
+    // 如果沒有資料，顯示提示
+    if (filteredData.length === 0) {
+      alert("沒有符合篩選條件的資料。請調整篩選條件。");
+    }
+  }
+
+    function updateMapMarkers(filteredData) {
+    // Clear existing markers
+    if (markerGroup) {
+      map.removeLayer(markerGroup);
+    }
+    
+    markerGroup = L.layerGroup().addTo(map);
+    
+    // Keep track of selected marker
+    let selectedMarker = null;
+    
+    // Add new markers for filtered properties
+    filteredData.forEach(item => {
+      const seed = parseInt(item['MLS#'].replace(/\D/g, '') || '0') % 100000;
+      const pseudoRandom = (seed / 100000) * 2 - 1; // -1 to 1 range
+      
+      const lat = 25.7617 + pseudoRandom * 0.05;
+      const lng = -80.1918 + (pseudoRandom * 1.5) * 0.05;
+      
+      // Create a marker with default icon
+      const defaultIcon = L.icon({
+        iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+        shadowSize: [41, 41]
+      });
+      
+      // Create red icon for selected state
+      const redIcon = L.icon({
+        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+        shadowSize: [41, 41]
+      });
+      
+      const marker = L.marker([lat, lng], {icon: defaultIcon}).addTo(markerGroup);
+      marker._mlsId = item['MLS#']; // Store MLS ID with marker
+      
+      marker.bindPopup(`
+        <b>MLS#: ${item['MLS#']}</b><br>
+        Year Built: ${item['Year Built']}<br>
+        Price: $${item['Last List Price']}<br>
+        SF: ${item['SF']}<br>
+      `);
+      
+      // Add click handler to show details and change marker color
+      marker.on('click', function() {
+        // Reset previous selected marker if exists
+        if (selectedMarker) {
+          selectedMarker.setIcon(defaultIcon);
+        }
+        
+        // Set this marker as selected
+        marker.setIcon(redIcon);
+        selectedMarker = marker;
+        
+        // Update info and highlight corresponding MLS item
+        updateInfo(item);
+        highlightMLSItem(item['MLS#']);
+      });
+    });
+  }
+
+  function calculateSimilarity(property1, property2) {
+    let similarityScore = 0;
+    let totalWeight = 0;
+    
+    // 1. Last List Price (權重: 20%)
+    if (property1['Last List Price'] && property2['Last List Price']) {
+      const price1 = parseFloat(property1['Last List Price'].toString().replace(/[^\d.]/g, ''));
+      const price2 = parseFloat(property2['Last List Price'].toString().replace(/[^\d.]/g, ''));
+      
+      if (!isNaN(price1) && !isNaN(price2)) {
+        const priceRange = price1 * 0.05; // 5% 的價格範圍
+        const priceDiff = Math.abs(price1 - price2);
+        
+        if (priceDiff <= priceRange) {
+          // 計算價格匹配度 (0-1)
+          const priceMatch = 1 - (priceDiff / priceRange);
+          similarityScore += priceMatch * 20;
+        }
+        totalWeight += 20;
+      }
+    }
+    
+    // 2. Year Built (權重: 15%)
+    if (property1['Year Built'] && property2['Year Built']) {
+      const year1 = parseInt(property1['Year Built']);
+      const year2 = parseInt(property2['Year Built']);
+      
+      if (!isNaN(year1) && !isNaN(year2)) {
+        const yearDiff = Math.abs(year1 - year2);
+        
+        if (yearDiff <= 5) {
+          // 計算年份匹配度 (0-1)
+          const yearMatch = 1 - (yearDiff / 5);
+          similarityScore += yearMatch * 15;
+        }
+        totalWeight += 15;
+      }
+    }
+    
+    // 3. SF Square Footage (權重: 15%)
+    if (property1['SF'] && property2['SF']) {
+      const sf1 = parseFloat(property1['SF'].toString().replace(/[^\d.]/g, ''));
+      const sf2 = parseFloat(property2['SF'].toString().replace(/[^\d.]/g, ''));
+      
+      if (!isNaN(sf1) && !isNaN(sf2)) {
+        const sfRange = sf1 * 0.1; // 10% 的面積範圍
+        const sfDiff = Math.abs(sf1 - sf2);
+        
+        if (sfDiff <= sfRange) {
+          // 計算面積匹配度 (0-1)
+          const sfMatch = 1 - (sfDiff / sfRange);
+          similarityScore += sfMatch * 15;
+        }
+        totalWeight += 15;
+      }
+    }
+    
+    // 4. 二元屬性: Pool, Waterfront, Pet Allowed (每個權重: 10%)
+    const binaryProperties = ['Pool', 'Waterfront', 'Pets Allowed'];
+    
+    binaryProperties.forEach(prop => {
+      if (property1[prop] !== undefined && property2[prop] !== undefined) {
+        if (property1[prop] === property2[prop]) {
+          similarityScore += 10;
+        }
+        totalWeight += 10;
+      }
+    });
+    
+    // 計算最終相似度百分比 (0-100)
+    return totalWeight > 0 ? (similarityScore / totalWeight) * 100 : 0;
+  }
+
+  // 尋找相似物業的函數
+  function findSimilarProperties(selectedProperty, allProperties, threshold = 90) {
+    // 排除自身
+    const otherProperties = allProperties.filter(p => p['MLS#'] !== selectedProperty['MLS#']);
+    
+    // 計算每個物業與選定物業的相似度
+    const similarProperties = otherProperties.map(property => {
+      const similarityScore = calculateSimilarity(selectedProperty, property);
+      return {
+        property: property,
+        score: similarityScore
+      };
+    });
+    
+    // 根據相似度分數排序
+    similarProperties.sort((a, b) => b.score - a.score);
+    
+    // 返回相似度超過閾值的物業
+    return similarProperties.filter(item => item.score >= threshold);
+  }
+
+  // Function to highlight the selected MLS item in the list
+  function highlightMLSItem(mlsId) {
+    // Remove highlight from all items
+    const allItems = document.querySelectorAll('.mls-item');
+    allItems.forEach(item => {
+      item.classList.remove('selected');
+    });
+    
+    // Add highlight to the matching item
+    const selectedItem = document.querySelector(`.mls-item[data-mls="${mlsId}"]`);
+    if (selectedItem) {
+      selectedItem.classList.add('selected');
+    }
+  }
+
+  function updateMLSList(filteredData) {
+    const mlsListDiv = document.getElementById('mls-list');
+    mlsListDiv.innerHTML = ''; // Clear existing items
+    
+    // Constants for pagination
+    const itemsPerPage = 42; // 3 rows of 14 items each
+    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+    let currentPage = 1;
+    
+    // Create pagination controls container
+    const paginationContainer = document.createElement('div');
+    paginationContainer.className = 'pagination-controls';
+    paginationContainer.style.display = 'flex';
+    paginationContainer.style.justifyContent = 'center';
+    paginationContainer.style.margin = '10px 0';
+    paginationContainer.style.gap = '10px';
+    
+    // Function to render items for the current page
+    function renderPage(page) {
+      // Clear current items
+      mlsListDiv.innerHTML = '';
+      
+      // Calculate start and end indices for current page
+      const startIndex = (page - 1) * itemsPerPage;
+      const endIndex = Math.min(startIndex + itemsPerPage, filteredData.length);
+      
+      // Create container for MLS items with proper styling
+      const itemsContainer = document.createElement('div');
+      itemsContainer.style.display = 'flex';
+      itemsContainer.style.flexWrap = 'wrap';
+      itemsContainer.style.gap = '10px';
+      itemsContainer.style.justifyContent = 'flex-start';
+      
+      // Render MLS items for current page
+      for (let i = startIndex; i < endIndex; i++) {
+        const item = filteredData[i];
+        
+        const mlsItemDiv = document.createElement('div');
+        mlsItemDiv.className = 'mls-item';
+        mlsItemDiv.dataset.mls = item['MLS#']; // Store MLS ID as data attribute
+        mlsItemDiv.textContent = item['MLS#'];
+        
+        // Style the MLS items
+        mlsItemDiv.style.backgroundColor = '#e0e0e0';
+        mlsItemDiv.style.padding = '8px 12px';
+        mlsItemDiv.style.borderRadius = '4px';
+        mlsItemDiv.style.cursor = 'pointer';
+        mlsItemDiv.style.minWidth = '80px';
+        mlsItemDiv.style.textAlign = 'center';
+        
+        mlsItemDiv.onclick = function() {
+          // Remove highlight from all items
+          document.querySelectorAll('.mls-item').forEach(el => {
+            el.classList.remove('selected');
+          });
+          
+          // Add highlight to this item
+          mlsItemDiv.classList.add('selected');
+          
+          // Update info and change marker color
+          updateInfo(item);
+          
+          // Find and highlight the corresponding marker
+          if (markerGroup) {
+            markerGroup.getLayers().forEach(marker => {
+              if (marker._mlsId === item['MLS#']) {
+                // Reset all markers first
+                markerGroup.getLayers().forEach(m => {
+                  m.setIcon(L.icon({
+                    iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41],
+                    popupAnchor: [1, -34],
+                    shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+                    shadowSize: [41, 41]
+                  }));
+                });
+                
+                // Highlight this marker
+                marker.setIcon(L.icon({
+                  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+                  iconSize: [25, 41],
+                  iconAnchor: [12, 41],
+                  popupAnchor: [1, -34],
+                  shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+                  shadowSize: [41, 41]
+                }));
+              }
+            });
+          }
+        };
+        
+        itemsContainer.appendChild(mlsItemDiv);
+      }
+      
+      mlsListDiv.appendChild(itemsContainer);
+      updatePaginationControls();
+      
+      // Show property count
+      const countDiv = document.createElement('div');
+      countDiv.style.textAlign = 'center';
+      countDiv.style.marginTop = '10px';
+      countDiv.style.fontSize = '14px';
+      countDiv.style.color = '#666';
+      countDiv.textContent = `Showing ${startIndex + 1}-${endIndex} of ${filteredData.length} properties`;
+      mlsListDiv.appendChild(countDiv);
+    }
+    
+    // Function to update pagination controls
+    function updatePaginationControls() {
+      paginationContainer.innerHTML = '';
+      
+      // Only show pagination if we have more than one page
+      if (totalPages <= 1) {
+        return;
+      }
+      
+      // Previous button
+      const prevButton = document.createElement('button');
+      prevButton.innerHTML = '&laquo;';
+      prevButton.disabled = currentPage === 1;
+      prevButton.style.padding = '5px 10px';
+      prevButton.style.borderRadius = '4px';
+      prevButton.style.border = '1px solid #ddd';
+      prevButton.style.backgroundColor = currentPage === 1 ? '#f0f0f0' : '#fff';
+      prevButton.style.cursor = currentPage === 1 ? 'default' : 'pointer';
+      prevButton.onclick = function() {
+        if (currentPage > 1) {
+          currentPage--;
+          renderPage(currentPage);
+        }
+      };
+      paginationContainer.appendChild(prevButton);
+      
+      // Page numbers
+      const maxPageButtons = 5; // Maximum number of page buttons to show
+      let startPage = Math.max(1, currentPage - Math.floor(maxPageButtons / 2));
+      let endPage = Math.min(totalPages, startPage + maxPageButtons - 1);
+      
+      // Adjust startPage if we're near the end
+      if (endPage - startPage + 1 < maxPageButtons) {
+        startPage = Math.max(1, endPage - maxPageButtons + 1);
+      }
+      
+      // First page button (if not in range)
+      if (startPage > 1) {
+        const firstButton = document.createElement('button');
+        firstButton.textContent = '1';
+        firstButton.style.padding = '5px 10px';
+        firstButton.style.borderRadius = '4px';
+        firstButton.style.border = '1px solid #ddd';
+        firstButton.style.backgroundColor = '#fff';
+        firstButton.style.cursor = 'pointer';
+        firstButton.onclick = function() {
+          currentPage = 1;
+          renderPage(currentPage);
+        };
+        paginationContainer.appendChild(firstButton);
+        
+        // Ellipsis if needed
+        if (startPage > 2) {
+          const ellipsis = document.createElement('span');
+          ellipsis.textContent = '...';
+          ellipsis.style.padding = '5px';
+          paginationContainer.appendChild(ellipsis);
+        }
+      }
+      
+      // Page buttons
+      for (let i = startPage; i <= endPage; i++) {
+        const pageButton = document.createElement('button');
+        pageButton.textContent = i;
+        pageButton.style.padding = '5px 10px';
+        pageButton.style.borderRadius = '4px';
+        pageButton.style.border = '1px solid #ddd';
+        pageButton.style.backgroundColor = i === currentPage ? '#3498db' : '#fff';
+        pageButton.style.color = i === currentPage ? '#fff' : '#000';
+        pageButton.style.cursor = i === currentPage ? 'default' : 'pointer';
+        pageButton.onclick = function() {
+          currentPage = i;
+          renderPage(currentPage);
+        };
+        paginationContainer.appendChild(pageButton);
+      }
+      
+      // Ellipsis and last page if needed
+      if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+          const ellipsis = document.createElement('span');
+          ellipsis.textContent = '...';
+          ellipsis.style.padding = '5px';
+          paginationContainer.appendChild(ellipsis);
+        }
+        
+        const lastButton = document.createElement('button');
+        lastButton.textContent = totalPages;
+        lastButton.style.padding = '5px 10px';
+        lastButton.style.borderRadius = '4px';
+        lastButton.style.border = '1px solid #ddd';
+        lastButton.style.backgroundColor = '#fff';
+        lastButton.style.cursor = 'pointer';
+        lastButton.onclick = function() {
+          currentPage = totalPages;
+          renderPage(currentPage);
+        };
+        paginationContainer.appendChild(lastButton);
+      }
+      
+      // Next button
+      const nextButton = document.createElement('button');
+      nextButton.innerHTML = '&raquo;';
+      nextButton.disabled = currentPage === totalPages;
+      nextButton.style.padding = '5px 10px';
+      nextButton.style.borderRadius = '4px';
+      nextButton.style.border = '1px solid #ddd';
+      nextButton.style.backgroundColor = currentPage === totalPages ? '#f0f0f0' : '#fff';
+      nextButton.style.cursor = currentPage === totalPages ? 'default' : 'pointer';
+      nextButton.onclick = function() {
+        if (currentPage < totalPages) {
+          currentPage++;
+          renderPage(currentPage);
+        }
+      };
+      paginationContainer.appendChild(nextButton);
+      
+      mlsListDiv.appendChild(paginationContainer);
+    }
+    
+    // Initial render
+    if (filteredData.length > 0) {
+      renderPage(currentPage);
+    } else {
+      const noResultsDiv = document.createElement('div');
+      noResultsDiv.textContent = 'No properties match your filters';
+      noResultsDiv.style.padding = '10px';
+      noResultsDiv.style.textAlign = 'center';
+      mlsListDiv.appendChild(noResultsDiv);
+    }
+  }
+
+    // Update the filter display to show current values
+    function updateFilterDisplay() {
+      const priceValue = document.getElementById('price-range').value;
+      document.getElementById('price-display').textContent = `$${priceValue}`;
+      
+      const moveInValue = document.getElementById('move-in-day').value;
+      document.getElementById('move-in-display').textContent = `${moveInValue} days`;
+    }
+
+    // Add event listeners for filter inputs
+    document.getElementById('price-range').addEventListener('input', updateFilterDisplay);
+    document.getElementById('move-in-day').addEventListener('input', updateFilterDisplay);
+    document.getElementById('apply-filters').addEventListener('click', applyFilters);
+
+    // Call this function to initialize filter displays
+    updateFilterDisplay();
+
+
+    // Comparison Feature Implementation
+    let compareList = [];
+    const maxCompareItems = 8;
+
+    // Initialize comparison feature
+    function initCompareFeature() {
+      // Add event listeners for comparison buttons
+      document.getElementById('add-to-compare').addEventListener('click', addToCompare);
+      document.getElementById('start-compare').addEventListener('click', startCompare);
+      document.getElementById('clear-compare').addEventListener('click', clearCompare);
+      
+      // Add event listener for Enter key in the input field
+      document.getElementById('compare-mls-input').addEventListener('keyup', function(event) {
+        if (event.key === "Enter") {
+          addToCompare();
+        }
+      });
+      
+      // Load previously selected MLS numbers from localStorage if available
+      const savedCompareList = localStorage.getItem('compareList');
+      if (savedCompareList) {
+        compareList = JSON.parse(savedCompareList);
+        updateCompareSelection();
+      }
+    }
+
+    // Add MLS to comparison list
+    function addToCompare() {
+      const input = document.getElementById('compare-mls-input');
+      const mlsId = input.value.trim();
+      
+      if (!mlsId) {
+        alert("Please enter an MLS number");
+        return;
+      }
+      
+      // Check if MLS already exists in the comparison list
+      if (compareList.includes(mlsId)) {
+        alert(`MLS# ${mlsId} is already in your comparison list`);
+        input.value = '';
+        return;
+      }
+      
+      // Check if the MLS exists in our data
+      const mlsExists = allData.some(item => item['MLS#'] === mlsId);
+      if (!mlsExists) {
+        alert(`MLS# ${mlsId} not found in database`);
+        return;
+      }
+      
+      // Check if we've reached the maximum number of items to compare
+      if (compareList.length >= maxCompareItems) {
+        alert(`You can compare up to ${maxCompareItems} properties at once`);
+        return;
+      }
+      
+      // Add to comparison list
+      compareList.push(mlsId);
+      saveCompareList();
+      updateCompareSelection();
+      
+      // Clear input
+      input.value = '';
+    }
+
+    // Update the comparison selection display
+    function updateCompareSelection() {
+      const selectionDiv = document.getElementById('compare-selection');
+      selectionDiv.innerHTML = '';
+      
+      // Create items for each MLS in the comparison list
+      compareList.forEach(mlsId => {
+        const item = document.createElement('div');
+        item.className = 'compare-item';
+        item.innerHTML = `${mlsId} <span class="compare-remove" onclick="removeFromCompare('${mlsId}')">×</span>`;
+        selectionDiv.appendChild(item);
+      });
+      
+      // Update button states
+      document.getElementById('start-compare').disabled = compareList.length < 2;
+      document.getElementById('clear-compare').disabled = compareList.length === 0;
+    }
+
+    // Remove an MLS from the comparison list
+    function removeFromCompare(mlsId) {
+      compareList = compareList.filter(id => id !== mlsId);
+      saveCompareList();
+      updateCompareSelection();
+    }
+
+    // Save comparison list to localStorage
+    function saveCompareList() {
+      localStorage.setItem('compareList', JSON.stringify(compareList));
+    }
+
+    // Start the comparison process
+    function startCompare() {
+      if (compareList.length < 2) {
+        alert('Please select at least 2 properties to compare');
+        return;
+      }
+      
+      // Create a URL with the selected MLS numbers
+      const compareUrl = 'comparison.html?mls=' + compareList.join(',');
+      
+      // Open comparison page in a new tab
+      window.open(compareUrl, '_blank');
+    }
+
+    // Clear all items from the comparison list
+    function clearCompare() {
+      compareList = [];
+      saveCompareList();
+      updateCompareSelection();
+    }
+
+    // Add a method to add current property to compare list
+    function addCurrentToCompare() {
+      const currentMls = document.getElementById('mls').textContent;
+      if (currentMls && currentMls !== ' - ' && currentMls !== 'N/A') {
+        // Check if already in list
+        if (compareList.includes(currentMls)) {
+          alert(`MLS# ${currentMls} is already in your comparison list`);
+          return;
+        }
+        
+        // Check if we've reached the maximum
+        if (compareList.length >= maxCompareItems) {
+          alert(`You can compare up to ${maxCompareItems} properties at once`);
+          return;
+        }
+        
+        // Add to comparison list
+        compareList.push(currentMls);
+        saveCompareList();
+        updateCompareSelection();
+      }
+    }
+
+    // Initialize comparison feature after page loads
+    document.addEventListener('DOMContentLoaded', function() {
+      initCompareFeature();
+    });
+
+
+
+  </script>  
+
+</body>
+</html>
