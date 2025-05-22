@@ -7,200 +7,13 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script> <!-- 用來解析 CSV -->
+  <link rel="stylesheet" href="project.css">
   <style>
-    body {
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      margin: 0;
-      font-family: Arial, sans-serif;
-    }
-
-    #filter {
-      padding: 10px;
-      background-color: #f4f4f4;
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-      margin-bottom: 20px;
-    }
-
-    #content {
-      display: flex;
-      flex: 1;
-    }
-
-    #map {
-      height: 100%;
-      width: 70%;
-    }
-
-    #info {
-      width: 30%;
-      padding: 20px;
-      background-color: #f9f9f9;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      overflow-y: auto;
-    }
-
-    .info-section {
-      margin-bottom: 15px;
-      font-size: 16px;
-    }
-
-    .info-section span {
-      display: block;
-      margin: 5px 0;
-    }
-
-    .info-section strong {
-      font-weight: bold;
-    }
-
-    .info-section .yes {
-      color: green;
-      font-weight: bold;
-    }
-
-    .info-section .no {
-      color: gray;
-    }
-
-    .mls-list {
-      margin: 20px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .mls-item {
-      padding: 10px;
-      background-color: #e0e0e0;
-      cursor: pointer;
-      border-radius: 5px;
-    }
-
-    .data-row {
-      display: flex;
-      justify-content: space-between;
-    }
-
-    .progress-bar {
-      width: 100%;
-      height: 10px;
-      background-color: #ddd;
-      margin-top: 5px;
-      border-radius: 5px;
-    }
-
-    .progress-bar .fill {
-      height: 100%;
-      border-radius: 5px;
-    }
-
-    /* Add these styles to your existing <style> section */
-    .mls-list {
-      margin: 20px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      justify-content: flex-start;
-    }
-
-    .mls-item {
-      padding: 8px 12px;
-      background-color: #e0e0e0;
-      cursor: pointer;
-      border-radius: 4px;
-      min-width: 80px;
-      text-align: center;
-      transition: all 0.2s ease;
-    }
-
-    .mls-item:hover {
-      background-color: #d0d0d0;
-    }
-
-    .mls-item.selected {
-      background-color: #303030;
-      color: white;
-      font-weight: bold;
-    }
-
-    /* Comparison feature styles */
-    .compare-container {
-      margin-top: 15px;
-      border-top: 1px solid #ddd;
-      padding-top: 15px;
-    }
-
-    .compare-title {
-      font-weight: bold;
-      margin-bottom: 10px;
-    }
-
-    .compare-selection {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 10px;
-    }
-
-    .compare-item {
-      background-color: #3498db;
-      color: white;
-      padding: 5px 8px;
-      border-radius: 4px;
-      font-size: 14px;
-      display: flex;
-      align-items: center;
-    }
-
-    .compare-remove {
-      margin-left: 5px;
-      cursor: pointer;
-      font-weight: bold;
-    }
-
-    .compare-input {
-      display: flex;
-      gap: 8px;
-    }
-
-    .compare-input input {
-      flex-grow: 1;
-      padding: 8px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-    }
-
-    .compare-buttons {
-      display: flex;
-      gap: 8px;
-      margin-top: 10px;
-    }
-
-    .compare-button {
-      background-color: #3498db;
-      color: white;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-weight: bold;
-    }
-
-    .compare-button.clear {
-      background-color: #e74c3c;
-    }
-
-    .compare-button:disabled {
-      background-color: #95a5a6;
-      cursor: not-allowed;
-    }
+   
   </style>
 </head>
 <body>
 
-  <!-- Replace the existing filter div with this code -->
   <div id="filter">
     <h3>Filters</h3>
     <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start;">
@@ -275,7 +88,7 @@
           <strong>Last List Price:</strong> <span id="last-price">$ - </span>
         </div>
         <div class="info-section data-row">
-          <strong>Percentage Change:</strong> <span id="percentage-change">0.0%</span>
+          <strong>Rented Price:</strong> <span id="rented-price">$ - </span>
         </div>
         
         <hr>
@@ -283,15 +96,9 @@
         <!-- 顯示 Year Built 和 Square Footage -->
         <div class="info-section data-row">
           <strong>Year Built:</strong> <span id="year-built"> - </span>
-          <div class="progress-bar">
-            <div id="year-built-range" class="fill" style="width: 50%; background-color: #4CAF50;"></div>
-          </div>
         </div>
         <div class="info-section data-row">
           <strong>Square Footage:</strong> <span id="sf-value"> - SF</span>
-          <div class="progress-bar">
-            <div id="sf-range" class="fill" style="width: 50%; background-color: #FF9800;"></div>
-          </div>
         </div>
 
         <hr>
@@ -329,11 +136,6 @@
 
         <hr>
 
-        <!-- 顯示 Compare -->
-        <!-- <div class="info-section data-row">
-          <strong>Compare:</strong> You can compare properties by clicking on the map or selecting from Similar MLS properties.
-        </div> -->
-
         <!-- Comparison Feature -->
         <div class="compare-container">
           <div class="compare-title">Compare Properties</div>
@@ -367,8 +169,8 @@
     let map;
     let markerGroup;
   
-    // 初始化地圖 - 修正：移到這裡以確保全局變數正確初始化
-    map = L.map('map').setView([25.7617, -80.1918], 12);  // 設定地圖中心為邁阿密
+    // 設定地圖中心為邁阿密
+    map = L.map('map').setView([25.7617, -80.1918], 12);  
   
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -429,7 +231,7 @@
           }
         });
 
-        // 設置價格滑塊的最大值為實際最大價格
+        // 設置價格的最大值為實際最大價格
         const priceSlider = document.getElementById('price-range');
         priceSlider.max = maxPrice;
         priceSlider.value = 2600; // 預設顯示全部價格範圍
@@ -455,22 +257,11 @@
       if (!item) return;
       
       document.getElementById('mls').textContent = item['MLS#'] || 'N/A';
-      document.getElementById('original-price').textContent = item['Original List Price'] ? `$${item['Original List Price']}` : 'N/A';
-      document.getElementById('last-price').textContent = item['Last List Price'] ? `$${item['Last List Price']}` : 'N/A';
-      document.getElementById('percentage-change').textContent = item['Percentage Change'] ? `${item['Percentage Change']}%` : 'N/A';
+      document.getElementById('original-price').textContent = item['Original List Price'] ? `${item['Original List Price']}` : 'N/A';
+      document.getElementById('last-price').textContent = item['Last List Price'] ? `${item['Last List Price']}` : 'N/A';
+      document.getElementById('rented-price').textContent = item['Rented Price'] ? `${item['Rented Price']}` : 'N/A';
       document.getElementById('year-built').textContent = item['Year Built'] || 'N/A';
       document.getElementById('sf-value').textContent = item['SF'] ? `${item['SF']} SF` : 'N/A';
-      
-      // Year Built 和 SF 的範圍顯示 - 修正：計算並應用百分比
-      if (item['Year Built'] && !isNaN(item['Year Built'])) {
-        const yearBuiltPercentage = calculateRange(item['Year Built'], 'Year Built');
-        document.getElementById('year-built-range').style.width = yearBuiltPercentage;
-      }
-      
-      if (item['SF'] && !isNaN(item['SF'])) {
-        const sfPercentage = calculateRange(item['SF'], 'Square Footage');
-        document.getElementById('sf-range').style.width = sfPercentage;
-      }
   
       // 根據 "Yes" / "No" 字符串來設定 Pool, Waterfront, Pets Allowed
       document.getElementById('pool-value').textContent = item['Pool'] === "Yes" ? 'Yes' : 'No';
@@ -486,10 +277,10 @@
       document.getElementById('be').textContent = item['BE'] || 'N/A';
       document.getElementById('ba').textContent = item['BA'] || 'N/A';
 
-      // 尋找相似物業 - 使用 requestAnimationFrame 避免阻塞 UI
+      // 尋找相似的資料 - 使用 requestAnimationFrame 避免阻塞 UI
       requestAnimationFrame(() => {
         // 顯示計算中的提示
-        document.getElementById('similar-mls').textContent = "計算中...";
+        document.getElementById('similar-mls').textContent = "loading...";
         
         // 使用 setTimeout 將計算推遲到下一個事件循環
         setTimeout(() => {
@@ -510,8 +301,6 @@
               similarItemDiv.className = 'mls-item similar-mls-item';
               similarItemDiv.dataset.mls = p.property['MLS#'];
               similarItemDiv.textContent = p.property['MLS#'];
-              
-              // Style the similar MLS items like the MLS list items
               similarItemDiv.style.backgroundColor = '#e0e0e0';
               similarItemDiv.style.padding = '6px 10px';
               similarItemDiv.style.borderRadius = '4px';
@@ -529,10 +318,10 @@
                 const property = allData.find(prop => prop['MLS#'] === mlsId);
                 
                 if (property) {
-                  // 更新資訊面板
+                  // 更新右邊的資訊
                   updateInfo(property);
                   
-                  // 查找和高亮對應的標記
+                  // 將選取到的座標變成紅色的
                   if (markerGroup) {
                     markerGroup.getLayers().forEach(marker => {
                       if (marker._mlsId === mlsId) {
@@ -555,41 +344,22 @@
             similarMlsElement.innerHTML = '';
             similarMlsElement.appendChild(similarContainer);
           } else {
-            document.getElementById('similar-mls').textContent = "無相似物業";
+            document.getElementById('similar-mls').textContent = "No similar properties";
           }
         }, 0);
       });
       
     }
-  
-    // 計算並返回範圍位置百分比 - 維持不變，只回傳百分比字串
-    function calculateRange(value, field) {
-      // 使用動態計算的最大最小值
-      const maxValues = {
-        'Year Built': maxYearBuilt,
-        'Square Footage': maxSquareFootage
-      };
-      const minValues = {
-        'Year Built': minYearBuilt,
-        'Square Footage': minSquareFootage
-      };
-  
-      const max = maxValues[field];
-      const min = minValues[field];
-      return ((value - min) / (max - min) * 100).toFixed(2) + '%';
-    }
 
     function applyFilters() {
-      // 獲取篩選值
+      
       const maxPrice = parseFloat(document.getElementById('price-range').value);
       const maxMoveInDays = parseInt(document.getElementById('move-in-day').value);
       const minBedrooms = parseInt(document.getElementById('bedrooms').value);
       const minSf = parseInt(document.getElementById('sf').value);
       const poolRequired = document.getElementById('pool').checked;
       const waterfrontRequired = document.getElementById('waterfront').checked;
-      const petAllowedRequired = document.getElementById('pet-allowed').checked;
-      
-      console.log(`篩選條件: 價格 <= ${maxPrice}, 入住天數 <= ${maxMoveInDays}, 臥室 >= ${minBedrooms}, 平方英尺 >= ${minSf}`);
+      const petAllowedRequired = document.getElementById('pet-allowed').checked;      
       
       // 計算今天的日期，用於比較 List Date
       const today = new Date();
@@ -600,7 +370,7 @@
           return false;
         }
         
-      // 1. 價格篩選 - 保持不變
+        // 1. price
         let price = null;
         if (item['Last List Price']) {
           if (typeof item['Last List Price'] === 'string') {
@@ -614,15 +384,15 @@
           return false;
         }
         
-        // 新增: 處理 List Date 篩選
+        // 2. move in day 
         if (maxMoveInDays > 0 && item['List Date']) {
           const dateStr = item['List Date'];
           const dateParts = dateStr.split('/');
           if (dateParts.length === 3) {
-            // 格式為 MM/DD/YYYY
+            // MM/DD/YYYY
             const listDate = new Date(
               parseInt(dateParts[2]), 
-              parseInt(dateParts[0]) - 1, 
+              parseInt(dateParts[0]) - 1,//JavaScript 月份從 0 開始
               parseInt(dateParts[1])
             );
             
@@ -638,7 +408,7 @@
             }
           }
         }
-      // 2. 臥室數篩選 - 增強型處理
+      // 3. be
       let bedrooms = null;
       if (item['BE']) {
         bedrooms = parseInt(item['BE']);
@@ -648,7 +418,7 @@
         return false;
       }
       
-      // 3. 平方英尺篩選 - 增強型處理
+      // 4. SF
       let squareFeet = null;
       if (item['SF']) {
         if (typeof item['SF'] === 'string') {
@@ -662,11 +432,7 @@
         return false;
       }
       
-      // 4. 入住日期篩選 - 更彈性的處理
-      // 注意：移除了入住日期篩選，讓用戶先看到資料
-      // 您可以根據需要重新添加此條件
-      
-      // 5. 特殊功能篩選
+      // 5. check box
       if (poolRequired && item['Pool'] !== "Yes") {
         return false;
       }
@@ -683,15 +449,13 @@
       return true;
     });
     
-    console.log(`篩選後剩餘 ${filteredData.length} 條資料`);
-    
     // 更新顯示
     updateMapMarkers(filteredData);
     updateMLSList(filteredData);
     
     // 如果沒有資料，顯示提示
     if (filteredData.length === 0) {
-      alert("沒有符合篩選條件的資料。請調整篩選條件。");
+      alert("There are no records matching your filter criteria. Please adjust your filter criteria.");
     }
   }
 
@@ -706,7 +470,7 @@
     // Keep track of selected marker
     let selectedMarker = null;
     
-    // Add new markers for filtered properties
+    // 隨機生成座標位置(需要改成自己的x,y值)
     filteredData.forEach(item => {
       const seed = parseInt(item['MLS#'].replace(/\D/g, '') || '0') % 100000;
       const pseudoRandom = (seed / 100000) * 2 - 1; // -1 to 1 range
@@ -735,12 +499,12 @@
       });
       
       const marker = L.marker([lat, lng], {icon: defaultIcon}).addTo(markerGroup);
-      marker._mlsId = item['MLS#']; // Store MLS ID with marker
+      marker._mlsId = item['MLS#']; 
       
       marker.bindPopup(`
         <b>MLS#: ${item['MLS#']}</b><br>
         Year Built: ${item['Year Built']}<br>
-        Price: $${item['Last List Price']}<br>
+        Price: ${item['Last List Price']}<br>
         SF: ${item['SF']}<br>
       `);
       
@@ -762,11 +526,32 @@
     });
   }
 
+  // 尋找相似的房屋資料
+  function findSimilarProperties(selectedProperty, allProperties, threshold = 90) {
+    // 排除自身
+    const otherProperties = allProperties.filter(p => p['MLS#'] !== selectedProperty['MLS#']);
+    
+    // 計算每個房屋與選定房屋的相似度
+    const similarProperties = otherProperties.map(property => {
+      const similarityScore = calculateSimilarity(selectedProperty, property);
+      return {
+        property: property,
+        score: similarityScore
+      };
+    });
+    
+    // 根據相似度分數排序
+    similarProperties.sort((a, b) => b.score - a.score);
+    
+    // 返回相似度超過threshold的房屋
+    return similarProperties.filter(item => item.score >= threshold);
+  }
+
   function calculateSimilarity(property1, property2) {
     let similarityScore = 0;
     let totalWeight = 0;
     
-    // 1. Last List Price (權重: 20%)
+    // 1. Last List Price (權重: 30%)
     if (property1['Last List Price'] && property2['Last List Price']) {
       const price1 = parseFloat(property1['Last List Price'].toString().replace(/[^\d.]/g, ''));
       const price2 = parseFloat(property2['Last List Price'].toString().replace(/[^\d.]/g, ''));
@@ -778,9 +563,9 @@
         if (priceDiff <= priceRange) {
           // 計算價格匹配度 (0-1)
           const priceMatch = 1 - (priceDiff / priceRange);
-          similarityScore += priceMatch * 20;
+          similarityScore += priceMatch * 30;
         }
-        totalWeight += 20;
+        totalWeight += 30;
       }
     }
     
@@ -801,7 +586,7 @@
       }
     }
     
-    // 3. SF Square Footage (權重: 15%)
+    // 3. SF Square Footage (權重: 25%)
     if (property1['SF'] && property2['SF']) {
       const sf1 = parseFloat(property1['SF'].toString().replace(/[^\d.]/g, ''));
       const sf2 = parseFloat(property2['SF'].toString().replace(/[^\d.]/g, ''));
@@ -813,13 +598,13 @@
         if (sfDiff <= sfRange) {
           // 計算面積匹配度 (0-1)
           const sfMatch = 1 - (sfDiff / sfRange);
-          similarityScore += sfMatch * 15;
+          similarityScore += sfMatch * 25;
         }
-        totalWeight += 15;
+        totalWeight += 25;
       }
     }
     
-    // 4. 二元屬性: Pool, Waterfront, Pet Allowed (每個權重: 10%)
+    // 4. Pool, Waterfront, Pet Allowed (每個權重: 10%)
     const binaryProperties = ['Pool', 'Waterfront', 'Pets Allowed'];
     
     binaryProperties.forEach(prop => {
@@ -835,26 +620,6 @@
     return totalWeight > 0 ? (similarityScore / totalWeight) * 100 : 0;
   }
 
-  // 尋找相似物業的函數
-  function findSimilarProperties(selectedProperty, allProperties, threshold = 90) {
-    // 排除自身
-    const otherProperties = allProperties.filter(p => p['MLS#'] !== selectedProperty['MLS#']);
-    
-    // 計算每個物業與選定物業的相似度
-    const similarProperties = otherProperties.map(property => {
-      const similarityScore = calculateSimilarity(selectedProperty, property);
-      return {
-        property: property,
-        score: similarityScore
-      };
-    });
-    
-    // 根據相似度分數排序
-    similarProperties.sort((a, b) => b.score - a.score);
-    
-    // 返回相似度超過閾值的物業
-    return similarProperties.filter(item => item.score >= threshold);
-  }
 
   // Function to highlight the selected MLS item in the list
   function highlightMLSItem(mlsId) {
@@ -876,7 +641,7 @@
     mlsListDiv.innerHTML = ''; // Clear existing items
     
     // Constants for pagination
-    const itemsPerPage = 42; // 3 rows of 14 items each
+    const itemsPerPage = 42; // 一頁42個MLS
     const totalPages = Math.ceil(filteredData.length / itemsPerPage);
     let currentPage = 1;
     
@@ -910,7 +675,7 @@
         
         const mlsItemDiv = document.createElement('div');
         mlsItemDiv.className = 'mls-item';
-        mlsItemDiv.dataset.mls = item['MLS#']; // Store MLS ID as data attribute
+        mlsItemDiv.dataset.mls = item['MLS#']; 
         mlsItemDiv.textContent = item['MLS#'];
         
         // Style the MLS items
@@ -1006,7 +771,7 @@
       paginationContainer.appendChild(prevButton);
       
       // Page numbers
-      const maxPageButtons = 5; // Maximum number of page buttons to show
+      const maxPageButtons = 10; 
       let startPage = Math.max(1, currentPage - Math.floor(maxPageButtons / 2));
       let endPage = Math.min(totalPages, startPage + maxPageButtons - 1);
       
@@ -1114,7 +879,7 @@
     // Update the filter display to show current values
     function updateFilterDisplay() {
       const priceValue = document.getElementById('price-range').value;
-      document.getElementById('price-display').textContent = `$${priceValue}`;
+      document.getElementById('price-display').textContent = `${priceValue}`;
       
       const moveInValue = document.getElementById('move-in-day').value;
       document.getElementById('move-in-display').textContent = `${moveInValue} days`;
