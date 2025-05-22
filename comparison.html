@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Property Comparison</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+  <link rel="stylesheet" href="comparison.css">
+  <style>
+    
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Property Comparison</h1>
+    
+    <div id="loading">Loading comparison data...</div>
+    
+    <div id="comparison-content" style="display: none;">
+      <div class="comparison-summary" id="property-cards"></div>
+      
+      <h2>Detailed Comparison</h2>
+      <div class="table-container">
+        <table class="comparison-table" id="comparison-table"></table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Get MLS numbers from URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const mlsParam = urlParams.get('mls');
+    
+    if (!mlsParam) {
+      document.getElementById('loading').textContent = 'No properties selected for comparison';
+    } else {
+      const mlsList = mlsParam.split(',');
+      let propertyData = [];
+      
+      // Load CSV data
+      Papa.parse("Rental Market Research Data.csv", {
+        download: true,
+        header: true,
+        dynamicTyping: true,
+        complete: function(results) {
+          const allData = results.data.filter(item => item['MLS#']);
+          
+          // Filter data for selected MLS numbers
+          mlsList.forEach(mlsId => {
+            const property = allData.find(item => item['MLS#'] == mlsId);
+            if (property) {
+              propertyData.push(property);
+            }
+          });
+          
+          if (propertyData.length < 2) {
+            document.getElementById('loading').textContent = 'Not enough valid properties found for comparison';
+          } else {
+            // Generate comparison content
+            generatePropertyCards(propertyData);
+            generateComparisonTable(propertyData);
+            
+            // Show comparison content
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('comparison-content').style.display = 'block';
+          }
+        }
+      });
+    }
+    function generateRadarChart(properties) {
+      // 在比較內容區域中添加雷達圖容器
+      const radarContainer = document.createElement('div');
+      radarContainer.id = 'radar-chart';
+      radarContainer.style.width = '100%';
+      radarContainer.style.height = '500px';
+      radarContainer.style.marginTop = '30px';
+      document.querySelector('.comparison-summary').after(radarContainer);
+      
+      // 定義雷達圖的關鍵指標
+      const features = [
+        { key: 'SF', label: 'Square Feet', max: 5000 },
+        { key: 'Year Built', label: 'Year Built', min: 1950, max: 2025 },
+        { key: 'BE', label: 'Bedrooms', max: 10 },
+        { key: 'BA', label: 'Bathrooms', max: 10 },
+        { key: 'GAR', label: 'Garage', max: 4 }
+      ];
+      
+      // 準備雷達圖數據
+      const radarData = properties.map(property => {
+        const dataPoint = { name: `MLS# ${property['MLS#']}` };
+        
+        features.forEach(feature => {
+          let value = property[feature.key];
+          if (typeof value === 'string') {
+            value = parseFloat(value.replace(/[^\d.-]/g, ''));
+          }
+          
+          // 將值轉換為0-1的範圍
+          const min = feature.min || 0;
+          const max = feature.max || 100;
+          
+          if (!isNaN(value)) {
+            dataPoint[feature.label] = Math.max(0, Math.min(1, (value - min) / (max - min)));
+          } else {
+            dataPoint[feature.label] = 0;
+          }
+        });
+        
+        return dataPoint;
+      });
+      
+      // 顏色比例尺
+      const colors = d3.scaleOrdinal()
+        .domain(radarData.map(d => d.name))
+        .range(["#3498db", "#e74c3c", "#2ecc71", "#f39c12", "#9b59b6"]);
+      
+      // 設置雷達圖的大小和邊距
+      const margin = { top: 50, right: 80, bottom: 50, left: 80 };
+      const width = 600 - margin.left - margin.right;
+      const height = 500 - margin.top - margin.bottom;
+      const radius = Math.min(width, height) / 2;
+      
+      // 創建SVG元素
+      const svg = d3.select("#radar-chart").append("svg")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom)
+        .append("g")
+        .attr("transform", `translate(${width / 2 + margin.left}, ${height / 2 + margin.top})`);
+      
+      // 為每個特徵創建一個徑向軸
+      const angleSlice = Math.PI * 2 / features.length;
+      
+      // 徑向刻度
+      const rScale = d3.scaleLinear()
+        .range([0, radius])
+        .domain([0, 1]);
+      
+      // 繪製雷達圖的環形網格
+      const axisGrid = svg.append("g").attr("class", "axis-grid");
+      
+      // 繪製同心圓
+      const circles = [0.2, 0.4, 0.6, 0.8, 1];
+      circles.forEach(d => {
+        axisGrid.append("circle")
+          .attr("r", rScale(d))
+          .style("fill", "none")
+          .style("stroke", "gray")
+          .style("stroke-opacity", 0.3)
+          .style("stroke-dasharray", "4,4");
+      });
+      
+      // 繪製軸線
+      const axis = axisGrid.selectAll(".axis")
+        .data(features)
+        .enter()
+        .append("g")
+        .attr("class", "axis");
+      
+      axis.append("line")
+        .attr("x1", 0)
+        .attr("y1", 0)
+        .attr("x2", (d, i) => rScale(1.1) * Math.cos(angleSlice * i - Math.PI / 2))
+        .attr("y2", (d, i) => rScale(1.1) * Math.sin(angleSlice * i - Math.PI / 2))
+        .style("stroke", "gray")
+        .style("stroke-width", "1px");
+      
+      // 添加軸標籤
+      axis.append("text")
+        .attr("class", "legend")
+        .attr("text-anchor", "middle")
+        .attr("dy", "0.35em")
+        .attr("x", (d, i) => rScale(1.2) * Math.cos(angleSlice * i - Math.PI / 2))
+        .attr("y", (d, i) => rScale(1.2) * Math.sin(angleSlice * i - Math.PI / 2))
+        .text(d => d.label)
+        .style("font-size", "11px");
+      
+      // 雷達圖路徑生成器
+      const radarLine = d3.lineRadial()
+        .angle((d, i) => i * angleSlice)
+        .radius(d => rScale(d))
+        .curve(d3.curveLinearClosed);
+      
+      // 繪製雷達圖形
+      const radarGroup = svg.selectAll(".radar-group")
+        .data(radarData)
+        .enter()
+        .append("g")
+        .attr("class", "radar-group");
+      
+      // 添加填充區域
+      radarGroup.append("path")
+        .attr("class", "radar-area")
+        .attr("d", d => {
+          const points = features.map(f => d[f.label]);
+          return radarLine(points);
+        })
+        .style("fill", d => colors(d.name))
+        .style("fill-opacity", 0.3)
+        .style("stroke", d => colors(d.name))
+        .style("stroke-width", "2px");
+      
+      // 添加點
+      features.forEach((feature, i) => {
+        radarGroup.append("circle")
+          .attr("cx", d => rScale(d[feature.label]) * Math.cos(angleSlice * i - Math.PI / 2))
+          .attr("cy", d => rScale(d[feature.label]) * Math.sin(angleSlice * i - Math.PI / 2))
+          .attr("r", 4)
+          .style("fill", d => colors(d.name))
+          .style("stroke", "#fff")
+          .style("stroke-width", "1px");
+      });
+      
+      // 添加圖例
+      const legend = svg.append("g")
+        .attr("class", "legend")
+        .attr("transform", `translate(${radius + 20}, ${-radius})`);
+      
+      radarData.forEach((d, i) => {
+        const legendRow = legend.append("g")
+          .attr("transform", `translate(0, ${i * 20})`);
+        
+        legendRow.append("rect")
+          .attr("width", 10)
+          .attr("height", 10)
+          .style("fill", colors(d.name));
+        
+        legendRow.append("text")
+          .attr("x", 20)
+          .attr("y", 9)
+          .text(d.name)
+          .style("font-size", "11px");
+      });
+    }
+    
+    function generatePropertyCards(properties) {
+      const container = document.getElementById('property-cards');
+      container.innerHTML = '';
+      
+      properties.forEach(property => {
+        const card = document.createElement('div');
+        card.className = 'property-card';
+        
+        // Format price properly
+        let price = property['Last List Price'];
+        if (typeof price === 'string') {
+          price = price.replace(/[^\d.]/g, '');
+        }
+        price = parseFloat(price);
+        const formattedPrice = isNaN(price) ? 'N/A' : '$' + price.toLocaleString();
+        
+        card.innerHTML = `
+          <h3>MLS# ${property['MLS#']}</h3>
+          <p><strong>Year Built:</strong> ${property['Year Built'] || 'N/A'}</p>
+          <p><strong>Price:</strong> ${formattedPrice}</p>
+          <p><strong>Square Feet:</strong> ${property['SF'] || 'N/A'}</p>          
+        `;
+        
+        container.appendChild(card);
+      });
+    }
+       
+    function generateComparisonTable(properties) {
+      const table = document.getElementById('comparison-table');
+      table.innerHTML = '';
+      
+      // Define comparison fields
+      const fields = [
+        { key: 'MLS#', label: 'MLS#' },
+        { key: 'Original List Price', label: 'Original List Price', format: formatPrice },
+        { key: 'Last List Price', label: 'Last List Price', format: formatPrice },
+        { key: 'Rented Price', label: 'Rented Price', format: formatPrice },
+        { key: 'SF', label: 'Square Feet' },
+        { key: 'Year Built', label: 'Year Built' },
+        { key: 'BE', label: 'Bedrooms' },
+        { key: 'BA', label: 'Bathrooms' },
+        { key: 'GAR', label: 'Garage' },
+        { key: 'Pool', label: 'Pool', format: formatYesNo },
+        { key: 'Waterfront', label: 'Waterfront', format: formatYesNo },
+        { key: 'Pets Allowed', label: 'Pets Allowed', format: formatYesNo },
+        { key: 'Percentage Change', label: 'Price Change %' }
+      ];
+      
+      // Create table header
+      const headerRow = document.createElement('tr');
+      headerRow.innerHTML = '<th>Property</th>';
+      
+      properties.forEach(property => {
+        headerRow.innerHTML += `<th>MLS# ${property['MLS#']}</th>`;
+      });
+      
+      table.appendChild(headerRow);
+      
+      // Create rows for each field
+      fields.forEach(field => {
+        if (field.key === 'MLS#') return; // Skip MLS# as it's already in the header
+        
+        const row = document.createElement('tr');
+        row.innerHTML = `<td><strong>${field.label}</strong></td>`;
+        
+        // Find best value for highlighting
+        let bestValueIndex = -1;
+        let bestValue = null;
+        
+        if (['Last List Price', 'Original List Price', 'Percentage Change'].includes(field.key)) {
+          // For price fields, lowest is best
+          let lowestValue = Infinity;
+          properties.forEach((property, index) => {
+            let value = property[field.key];
+            if (typeof value === 'string') {
+              value = parseFloat(value.replace(/[^\d.-]/g, ''));
+            }
+            if (!isNaN(value) && value < lowestValue) {
+              lowestValue = value;
+              bestValueIndex = index;
+            }
+          });
+        } else if (['SF', 'BE', 'BA', 'GAR', 'Year Built'].includes(field.key)) {
+          // For these fields, highest is best
+          let highestValue = -Infinity;
+          properties.forEach((property, index) => {
+            let value = property[field.key];
+            if (typeof value === 'string') {
+              value = parseFloat(value.replace(/[^\d.-]/g, ''));
+            }
+            if (!isNaN(value) && value > highestValue) {
+              highestValue = value;
+              bestValueIndex = index;
+            }
+          });
+        } 
+        // else if (['Pool', 'Waterfront', 'Pets Allowed'].includes(field.key)) {
+        //   // For yes/no fields, "Yes" is best
+        //   properties.forEach((property, index) => {
+        //     if (property[field.key] === 'Yes') {
+        //       bestValueIndex = index;
+        //     }
+        //   });
+        // }
+        
+        // Add cells for each property
+        properties.forEach((property, index) => {
+          let value = property[field.key];
+          
+          // Format value if formatter exists
+          if (field.format) {
+            value = field.format(value);
+          }
+          
+          // Highlight best value
+          const isHighlighted = index === bestValueIndex;
+          row.innerHTML += `<td class="${isHighlighted ? 'highlight-cell' : ''}">${value || 'N/A'}</td>`;
+        });
+        
+        table.appendChild(row);
+      });
+
+      setTimeout(() => {
+        generateRadarChart(properties);
+        generateDashboard(properties);
+      }, 50);
+    }
+    
+    function formatPrice(price) {
+      if (!price) return 'N/A';
+      
+      if (typeof price === 'string') {
+        price = parseFloat(price.replace(/[^\d.]/g, ''));
+      }
+      
+      return isNaN(price) ? 'N/A' : '$' + price.toLocaleString();
+    }
+    
+    function formatYesNo(value) {
+      if (!value) return 'N/A';
+      
+      if (value === 'Yes') {
+        return '<span class="yes-value">Yes</span>';
+      } else if (value === 'No') {
+        return '<span class="no-value">No</span>';
+      }
+      
+      return value;
+    }
+
+    function generateDashboard(properties) {
+    // 創建儀表板容器
+    const dashboardContainer = document.createElement('div');
+    dashboardContainer.id = 'property-dashboard';
+    dashboardContainer.style.marginTop = '40px';
+    document.querySelector('.table-container').after(dashboardContainer);
+  
+    // 添加儀表板標題
+    // const dashboardTitle = document.createElement('h2');
+    // dashboardTitle.textContent = '物業比較視覺分析';
+    // dashboardContainer.appendChild(dashboardTitle);
+  
+    // 創建圖表網格佈局
+    const chartGrid = document.createElement('div');
+    chartGrid.style.display = 'grid';
+    chartGrid.style.gridTemplateColumns = 'repeat(2, 1fr)';
+    chartGrid.style.gap = '20px';
+    chartGrid.style.marginTop = '20px';
+    dashboardContainer.appendChild(chartGrid);
+  
+    // 添加各種圖表區域
+    const priceComparisonDiv = createChartContainer('price-comparison-chart', 'price comparison chart');
+    const pricePerSqFtDiv = createChartContainer('price-per-sqft-chart', 'price per SF chart');
+    const timelineDiv = createChartContainer('timeline-chart', 'timeline chart');
+    const priceChangeDiv = createChartContainer('price-change-chart', 'price change chart');
+    
+    chartGrid.appendChild(priceComparisonDiv);
+    chartGrid.appendChild(pricePerSqFtDiv);
+    chartGrid.appendChild(timelineDiv);
+    chartGrid.appendChild(priceChangeDiv);
+  
+    // 繪製所有圖表
+    createPriceComparisonChart(properties);
+    createPricePerSqFtChart(properties);
+    createTimelineChart(properties);
+    createPriceChangeChart(properties);
+}
+  
+  // 創建通用圖表容器
+  function createChartContainer(id, title) {
+    const div = document.createElement('div');
+    div.id = id + '-container';
+    div.className = 'chart-container';
+    div.style.backgroundColor = '#fff';
+    div.style.borderRadius = '8px';
+    div.style.padding = '15px';
+    div.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
+    div.style.height = '400px';
+    
+    const chartTitle = document.createElement('h3');
+    chartTitle.textContent = title;
+    chartTitle.style.margin = '0 0 15px 0';
+    chartTitle.style.color = '#333';
+    div.appendChild(chartTitle);
+    
+    const chartDiv = document.createElement('div');
+    chartDiv.id = id;
+    chartDiv.style.width = '100%';
+    chartDiv.style.height = 'calc(100% - 30px)';
+    div.appendChild(chartDiv);
+    
+    return div;
+  }
+  
+  // 1. 價格比較長條圖
+  function createPriceComparisonChart(properties) {
+    const data = properties.map(p => ({
+      mls: `MLS# ${p['MLS#']}`,
+      originalPrice: parseFloat((p['Original List Price'] || '0').toString().replace(/[^\d.]/g, '')),
+      rentedPrice: parseFloat((p['Rented Price'] || '0').toString().replace(/[^\d.]/g, '')),
+      lastListPrice: parseFloat((p['Last List Price'] || '0').toString().replace(/[^\d.]/g, ''))
+    }));
+  
+    const margin = {top: 20, right: 30, bottom: 60, left: 60};
+    const width = document.getElementById('price-comparison-chart').clientWidth - margin.left - margin.right;
+    const height = document.getElementById('price-comparison-chart').clientHeight - margin.top - margin.bottom;
+  
+    const svg = d3.select('#price-comparison-chart')
+      .append('svg')
+      .attr('width', width + margin.left + margin.right)
+      .attr('height', height + margin.top + margin.bottom)
+      .append('g')
+      .attr('transform', `translate(${margin.left},${margin.top})`);
+  
+    // X軸比例尺
+    const x = d3.scaleBand()
+      .domain(data.map(d => d.mls))
+      .range([0, width])
+      .padding(0.3);
+  
+    // Y軸比例尺
+    const maxPrice = d3.max(data, d => Math.max(d.originalPrice, d.rentedPrice, d.lastListPrice));
+    const y = d3.scaleLinear()
+      .domain([0, maxPrice * 1.1])
+      .range([height, 0]);
+  
+    // 添加X軸
+    svg.append('g')
+      .attr('transform', `translate(0,${height})`)
+      .call(d3.axisBottom(x))
+      .selectAll('text')
+      .style('text-anchor', 'end')
+      .attr('dx', '-.8em')
+      .attr('dy', '.15em')
+      .attr('transform', 'rotate(-45)');
+  
+    // 添加Y軸
+    svg.append('g')
+      .call(d3.axisLeft(y).tickFormat(d => `$${d3.format(',')(d)}`));
+  
+    // 定義條形圖組
+    const groups = ['originalPrice', 'lastListPrice', 'rentedPrice'];
+    const groupLabels = ['originalPrice', 'lastListPrice', 'rentedPrice'];
+    const colors = ['#3498db', '#e74c3c', '#2ecc71'];
+  
+    // 定義分組比例尺
+    const xSubgroup = d3.scaleBand()
+      .domain(groups)
+      .range([0, x.bandwidth()])
+      .padding(0.05);
+  
+    // 繪製條形
+    groups.forEach((group, i) => {
+      svg.selectAll(`.bar-${group}`)
+        .data(data)
+        .join('rect')
+        .attr('class', `bar-${group}`)
+        .attr('x', d => x(d.mls) + xSubgroup(group))
+        .attr('y', d => y(d[group]))
+        .attr('width', xSubgroup.bandwidth())
+        .attr('height', d => height - y(d[group]))
+        .attr('fill', colors[i]);
+    });
+  
+    // 添加圖例
+    const legend = svg.append('g')
+      .attr('transform', `translate(${width/2 - 100}, ${-margin.top/2})`);
+  
+    groups.forEach((group, i) => {
+      const legendRow = legend.append('g')
+        .attr('transform', `translate(${i * 100}, 0)`);
+      
+      legendRow.append('rect')
+        .attr('width', 10)
+        .attr('height', 10)
+        .attr('fill', colors[i]);
+      
+      legendRow.append('text')
+        .attr('x', 15)
+        .attr('y', 10)
+        .text(groupLabels[i])
+        .style('font-size', '10px');
+    });
+  }
+  
+  // 2. SF價格條形圖
+  function createPricePerSqFtChart(properties) {
+    const data = properties.map(p => {
+      const sf = parseFloat((p['SF'] || '0').toString().replace(/[^\d.]/g, ''));
+      const rentedPrice = parseFloat((p['Rented Price'] || '0').toString().replace(/[^\d.]/g, ''));
+      const pricePerSqFt = sf > 0 ? rentedPrice / sf : 0;
+      
+      return {
+        mls: `MLS# ${p['MLS#']}`,
+        pricePerSqFt: pricePerSqFt,
+        sf: sf
+      };
+    });
+  
+    const margin = {top: 20, right: 30, bottom: 60, left: 60};
+    const width = document.getElementById('price-per-sqft-chart').clientWidth - margin.left - margin.right;
+    const height = document.getElementById('price-per-sqft-chart').clientHeight - margin.top - margin.bottom;
+  
+    const svg = d3.select('#price-per-sqft-chart')
+      .append('svg')
+      .attr('width', width + margin.left + margin.right)
+      .attr('height', height + margin.top + margin.bottom)
+      .append('g')
+      .attr('transform', `translate(${margin.left},${margin.top})`);
+  
+    // X軸比例尺
+    const x = d3.scaleBand()
+      .domain(data.map(d => d.mls))
+      .range([0, width])
+      .padding(0.3);
+  
+    // Y軸比例尺
+    const maxPricePerSqFt = d3.max(data, d => d.pricePerSqFt);
+    const y = d3.scaleLinear()
+      .domain([0, maxPricePerSqFt * 1.1])
+      .range([height, 0]);
+  
+    // 添加X軸
+    svg.append('g')
+      .attr('transform', `translate(0,${height})`)
+      .call(d3.axisBottom(x))
+      .selectAll('text')
+      .style('text-anchor', 'end')
+      .attr('dx', '-.8em')
+      .attr('dy', '.15em')
+      .attr('transform', 'rotate(-45)');
+  
+    // 添加Y軸
+    svg.append('g')
+      .call(d3.axisLeft(y).tickFormat(d => `$${d3.format('.2f')(d)}`));
+  
+    // 繪製條形
+    svg.selectAll('.bar')
+      .data(data)
+      .join('rect')
+      .attr('class', 'bar')
+      .attr('x', d => x(d.mls))
+      .attr('y', d => y(d.pricePerSqFt))
+      .attr('width', x.bandwidth())
+      .attr('height', d => height - y(d.pricePerSqFt))
+      .attr('fill', '#9b59b6');
+  
+    // 添加標籤
+    svg.selectAll('.bar-label')
+      .data(data)
+      .join('text')
+      .attr('class', 'bar-label')
+      .attr('x', d => x(d.mls) + x.bandwidth() / 2)
+      .attr('y', d => y(d.pricePerSqFt) - 5)
+      .attr('text-anchor', 'middle')
+      .text(d => `$${d.pricePerSqFt.toFixed(2)}`)
+      .style('font-size', '10px');
+  
+    // 添加面積標籤
+    svg.selectAll('.sf-label')
+      .data(data)
+      .join('text')
+      .attr('class', 'sf-label')
+      .attr('x', d => x(d.mls) + x.bandwidth() / 2)
+      .attr('y', d => y(0) - 5)
+      .attr('text-anchor', 'middle')
+      .text(d => `${d.sf} SF`)
+      .style('font-size', '10px')
+      .style('fill', '#666');
+  }
+  
+  // 3. 時間線圖
+  function createTimelineChart(properties) {
+    const parseDate = dateStr => {
+      if (!dateStr) return null;
+      const parts = dateStr.split('/');
+      if (parts.length !== 3) return null;
+      return new Date(+parts[2], +parts[0] - 1, +parts[1]);
+    };
+  
+    const data = properties.map(p => ({
+      mls: `MLS# ${p['MLS#']}`,
+      listDate: parseDate(p['List Date']),
+      rentedDate: parseDate(p['Rented Date']),
+      availableDate: parseDate(p['Available Date']),
+      lastStatusChangeDate: parseDate(p['Last Status Change Date']),
+      dom: p['Calculated DOM']
+    })).filter(d => d.listDate && d.rentedDate);
+  
+    const margin = {top: 30, right: 50, bottom: 60, left: 100};
+    const width = document.getElementById('timeline-chart').clientWidth - margin.left - margin.right;
+    const height = document.getElementById('timeline-chart').clientHeight - margin.top - margin.bottom;
+  
+    const svg = d3.select('#timeline-chart')
+      .append('svg')
+      .attr('width', width + margin.left + margin.right)
+      .attr('height', height + margin.top + margin.bottom)
+      .append('g')
+      .attr('transform', `translate(${margin.left},${margin.top})`);
+  
+    // 找出所有日期的最小值和最大值
+    const dates = data.flatMap(d => [d.listDate, d.rentedDate, d.availableDate, d.lastStatusChangeDate].filter(Boolean));
+    const minDate = d3.min(dates);
+    const maxDate = d3.max(dates);
+    
+    // 給日期範圍增加緩衝
+    const dateRange = [
+      new Date(minDate.getTime() - 7 * 24 * 60 * 60 * 1000), // 一周前
+      new Date(maxDate.getTime() + 7 * 24 * 60 * 60 * 1000)  // 一周後
+    ];
+  
+    // X軸比例尺（時間）
+    const x = d3.scaleTime()
+      .domain(dateRange)
+      .range([0, width]);
+  
+    // Y軸比例尺（屬性）
+    const y = d3.scaleBand()
+      .domain(data.map(d => d.mls))
+      .range([0, height])
+      .padding(0.2);
+  
+    // 添加X軸
+    svg.append('g')
+      .attr('transform', `translate(0,${height})`)
+      .call(d3.axisBottom(x).tickFormat(d3.timeFormat('%m/%d/%Y')))
+      .selectAll('text')
+      .style('text-anchor', 'end')
+      .attr('dx', '-.8em')
+      .attr('dy', '.15em')
+      .attr('transform', 'rotate(-45)');
+  
+    // 添加Y軸
+    svg.append('g')
+      .call(d3.axisLeft(y));
+  
+    // 為每個屬性創建時間線
+    data.forEach(d => {
+      // 畫一條背景線
+      svg.append('line')
+        .attr('x1', x(dateRange[0]))
+        .attr('x2', x(dateRange[1]))
+        .attr('y1', y(d.mls) + y.bandwidth() / 2)
+        .attr('y2', y(d.mls) + y.bandwidth() / 2)
+        .attr('stroke', '#f0f0f0')
+        .attr('stroke-width', 2);
+      
+      // 畫列表到出租的線段
+      if (d.listDate && d.rentedDate) {
+        svg.append('line')
+          .attr('x1', x(d.listDate))
+          .attr('x2', x(d.rentedDate))
+          .attr('y1', y(d.mls) + y.bandwidth() / 2)
+          .attr('y2', y(d.mls) + y.bandwidth() / 2)
+          .attr('stroke', '#3498db')
+          .attr('stroke-width', 5)
+          .attr('stroke-linecap', 'round');
+      }
+      
+      // 添加列表日期點
+      if (d.listDate) {
+        svg.append('circle')
+          .attr('cx', x(d.listDate))
+          .attr('cy', y(d.mls) + y.bandwidth() / 2)
+          .attr('r', 5)
+          .attr('fill', '#3498db');
+      }
+      
+      // 添加出租日期點
+      if (d.rentedDate) {
+        svg.append('circle')
+          .attr('cx', x(d.rentedDate))
+          .attr('cy', y(d.mls) + y.bandwidth() / 2)
+          .attr('r', 5)
+          .attr('fill', '#e74c3c');
+      }
+      
+      // 添加DOM標籤
+      if (d.dom) {
+        svg.append('text')
+          .attr('x', x(d.rentedDate) + 10)
+          .attr('y', y(d.mls) + y.bandwidth() / 2 + 5)
+          .text(`${d.dom} 天`)
+          .style('font-size', '10px')
+          .style('fill', '#666');
+      }
+    });
+    
+    // 添加圖例
+    const legend = svg.append('g')
+      .attr('transform', `translate(0, ${-margin.top/2})`);
+    
+    // 列表日期
+    legend.append('circle')
+      .attr('cx', 0)
+      .attr('cy', 0)
+      .attr('r', 5)
+      .attr('fill', '#3498db');
+    
+    legend.append('text')
+      .attr('x', 10)
+      .attr('y', 3)
+      .text('List Date')
+      .style('font-size', '10px')
+      .style('fill', '#666');
+    
+    // 出租日期
+    legend.append('circle')
+      .attr('cx', 80)
+      .attr('cy', 0)
+      .attr('r', 5)
+      .attr('fill', '#e74c3c');
+    
+    legend.append('text')
+      .attr('x', 90)
+      .attr('y', 3)
+      .text('Rented Date')
+      .style('font-size', '10px')
+      .style('fill', '#666');
+  }
+   
+  // 4. 價格變動分析
+  function createPriceChangeChart(properties) {
+    const data = properties.map(p => {
+      const originalPrice = parseFloat((p['Original List Price'] || '0').toString().replace(/[^\d.]/g, ''));
+      const lastListPrice = parseFloat((p['Last List Price'] || '0').toString().replace(/[^\d.]/g, ''));
+      const rentedPrice = parseFloat((p['Rented Price'] || '0').toString().replace(/[^\d.]/g, ''));
+      const priceChange = parseFloat((p['Price Change'] || '0').toString().replace(/[^\d.]/g, ''));
+      const percentageChange = parseFloat((p['Percentage Change'] || '0').toString().replace(/[^\d.-]/g, ''));
+
+      return {
+        mls: `MLS# ${p['MLS#']}`,
+        originalPrice,
+        lastListPrice,
+        rentedPrice,
+        priceChange,
+        percentageChange
+      };
+    });
+
+    const margin = {top: 30, right: 30, bottom: 60, left: 60};
+    const width = document.getElementById('price-change-chart').clientWidth - margin.left - margin.right;
+    const height = document.getElementById('price-change-chart').clientHeight - margin.top - margin.bottom;
+
+    d3.select('#price-change-chart').selectAll('svg').remove(); // 清除舊圖表
+
+    const svg = d3.select('#price-change-chart')
+      .append('svg')
+      .attr('width', width + margin.left + margin.right)
+      .attr('height', height + margin.top + margin.bottom)
+      .append('g')
+      .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // X軸比例尺
+    const x = d3.scaleBand()
+      .domain(data.map(d => d.mls))
+      .range([0, width])
+      .padding(0.3);
+
+    // Y軸比例尺
+    const maxPercentage = d3.max(data, d => Math.max(Math.abs(d.percentageChange), 0.1)) * 1.5;
+    const y = d3.scaleLinear()
+      .domain([-maxPercentage, maxPercentage])
+      .range([height, 0]);
+
+    // X軸
+    svg.append('g')
+      .attr('transform', `translate(0,${y(0)})`)
+      .call(d3.axisBottom(x))
+      .selectAll('text')
+      .style('text-anchor', 'end')
+      .attr('dx', '-.8em')
+      .attr('dy', '.15em')
+      .attr('transform', 'rotate(-45)');
+
+    // Y軸
+    svg.append('g')
+      .call(d3.axisLeft(y).tickFormat(d => `${d.toFixed(1)}%`));
+
+    // 中間 0% 線
+    svg.append('line')
+      .attr('x1', 0)
+      .attr('x2', width)
+      .attr('y1', y(0))
+      .attr('y2', y(0))
+      .attr('stroke', '#999')
+      .attr('stroke-width', 1)
+      .attr('stroke-dasharray', '3,3');
+
+    // 加入 Tooltip（可選）
+    const tooltip = d3.select('#price-change-chart')
+      .append('div')
+      .style('position', 'absolute')
+      .style('background', '#fff')
+      .style('border', '1px solid #ccc')
+      .style('padding', '6px 10px')
+      .style('font-size', '12px')
+      .style('border-radius', '4px')
+      .style('pointer-events', 'none')
+      .style('display', 'none');
+
+    // 繪製條形圖
+    svg.selectAll('.bar')
+      .data(data)
+      .join('rect')
+      .attr('class', 'bar')
+      .attr('x', d => x(d.mls))
+      .attr('y', d => d.percentageChange >= 0 ? y(d.percentageChange) : y(0))
+      .attr('width', x.bandwidth())
+      .attr('height', d => Math.abs(y(d.percentageChange) - y(0)))
+      .attr('fill', d => d.percentageChange >= 0 ? '#4caf50' : '#f44336') // 綠/紅
+      .on('mouseover', function (event, d) {
+        tooltip
+          .html(`<strong>${d.mls}</strong><br>Change: ${d.percentageChange.toFixed(1)}%<br>From: $${d.originalPrice}<br>To: $${d.rentedPrice}`)
+          .style('left', event.pageX + 10 + 'px')
+          .style('top', event.pageY - 40 + 'px')
+          .style('display', 'block');
+      })
+      .on('mousemove', function (event) {
+        tooltip
+          .style('left', event.pageX + 10 + 'px')
+          .style('top', event.pageY - 40 + 'px');
+      })
+      .on('mouseout', function () {
+        tooltip.style('display', 'none');
+      });
+  }
+    
+  </script>
+</body>
+</html>
