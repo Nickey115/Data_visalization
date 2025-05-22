@@ -1,7 +1,7 @@
 # Data_visalization
 
-## project.html：initial page
+- project.html：initial page
 
-## comparison.html：compare page
+- comparison.html：compare page
 
-## project.css/comparison.css：page design
+- project.css/comparison.css：page design
