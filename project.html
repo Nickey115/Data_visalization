@@ -1,1046 +1,1450 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rental Market Map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script> <!-- 用來解析 CSV -->
-  <link rel="stylesheet" href="project.css">
-  <style>
-   
-  </style>
-</head>
-<body>
-
-  <div id="filter">
-    <h3>Filters</h3>
-    <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start;">
-      <!-- Price Range -->
-      <div style="flex: 1; min-width: 200px;">
-        <label for="price-range">Price Range (up to <span id="price-display">$2000</span>)</label>
-        <input type="range" id="price-range" min="0" max="10000" value="2000" style="width: 100%;">
-      </div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rental Market Map</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="project.css">
+    <style>
       
-      <!-- Move In Day -->
-      <div style="flex: 1; min-width: 200px;">
-        <label for="move-in-day">List Date <span id="move-in-display">30 days</span></label>
-        <input type="range" id="move-in-day" min="0" max="90" value="30" style="width: 100%;">
-      </div>
-      
-      <!-- Bedrooms -->
-      <div style="flex: 1; min-width: 200px;">
-        <label for="bedrooms">Min Bedrooms</label>
-        <input type="number" id="bedrooms" placeholder="Bedrooms" value="2" min="1" max="10" style="width: 100%;">
-      </div>
-      
-      <!-- Square Feet -->
-      <div style="flex: 1; min-width: 200px;">
-        <label for="sf">Min SF (Square Feet)</label>
-        <input type="number" id="sf" placeholder="Square Feet" value="1000" min="0" style="width: 100%;">
+    </style>
+  </head>
+  <body>
+    <div id="content">
+      <div id="map"></div>
+      <div id="sidepanel">
+        <div id="filter">
+          <h5>Filters</h5>
+          <label class="form-label" for="county">County</label>
+          <select
+            id="county"
+            class="form-select form-select-sm mb-3"
+            multiple
+            size="4"
+          ></select>
+          <label class="form-label" for="city">City</label>
+          <select
+            id="city"
+            class="form-select form-select-sm mb-3"
+            multiple
+            size="4"
+          ></select>
+          <label class="form-label" for="property-type">Property Type</label>
+          <select
+            id="property-type"
+            class="form-select form-select-sm mb-3"
+            multiple
+            size="3"
+          >
+            <option>Single-Family Home</option>
+            <option>Townhome/Villa</option>
+            <option>Condo</option>
+          </select>
+          <label class="form-label" for="rented-year">Rented Year</label>
+          <input
+            id="rented-year"
+            type="number"
+            class="form-control form-control-sm mb-3"
+            placeholder="2024"
+          />
+          <label class="form-label" for="bedrooms">Bedrooms</label>
+          <select id="bedrooms" class="form-select form-select-sm mb-3">
+            <option value="">Any</option>
+            <option>0</option>
+            <option>1</option>
+            <option>2</option>
+            <option>3</option>
+            <option>4-5</option>
+            <option>6+</option>
+          </select>
+          <label class="form-label" for="sf-range">Square footage</label>
+          <select id="sf-range" class="form-select form-select-sm mb-3">
+            <option value="">Any</option>
+            <option value="1000"> 1 000 sq ft</option>
+            <option value="1000-2000">1 000–2 000 sq ft</option>
+            <option value="2000-3000">2 000–3 000 sq ft</option>
+            <option value="3000-4000">3 000–4 000 sq ft</option>
+            <option value="4000-5000">4 000–5 000 sq ft</option>
+            <option value=">5000">&gt; 5 000 sq ft</option>
+          </select>
+          <div id="pool-container" style="display: none">
+            <label class="form-label" for="pool-filter">Private Pool</label>
+            <select
+              id="pool-filter"
+              class="form-select form-select-sm mb-3"
+            ></select>
+          </div>
+          <label class="form-label" for="waterfront-filter">Waterfront</label>
+          <select
+            id="waterfront-filter"
+            class="form-select form-select-sm mb-3"
+          ></select>
+        </div>
+        <div id="mls-list" class="mls-list"></div>
+        <!-- <div class="compare-container">
+          <h6>Compare Properties</h6>
+          <div id="compare-selection" class="mb-2"></div>
+          <div class="input-group input-group-sm">
+            <input
+              id="compare-mls-input"
+              type="text"
+              class="form-control"
+              placeholder="MLS#"
+            />
+            <button id="add-to-compare" class="btn btn-primary">Add</button>
+          </div>
+          <button
+            id="start-compare"
+            class="btn btn-success btn-sm mt-2 me-2"
+            disabled
+          >
+            Compare
+          </button>
+          <button
+            id="clear-compare"
+            class="btn btn-secondary btn-sm mt-2"
+            disabled
+          >
+            Clear</button>
+        </div> -->
       </div>
     </div>
-    
-    <div style="display: flex; flex-wrap: wrap; gap: 40px; margin-top: 20px; align-items: center;">
-      <!-- Checkboxes -->
-      <div style="display: flex; gap: 40px;">
-        <div>
-          <input type="checkbox" id="pool">
-          <label for="pool">Pool</label>
-        </div>
+
+    <div id="chart-container" style="display: none; margin: 20px 0; background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px;">
+      <h3>Selected Area Analytics</h3>
+      
+      <div class="chart-overlay-controls">
         
-        <div>
-          <input type="checkbox" id="waterfront">
-          <label for="waterfront">Waterfront</label>
-        </div>
-        
-        <div>
-          <input type="checkbox" id="pet-allowed">
-          <label for="pet-allowed">Pet Allowed</label>
+        <div id="overlay-list"></div>        
+        <div class="overlay-item" style="background: #e7e7eb; border-color: #0f1012;">
+          <div class="overlay-label">Add Overlay:</div> 
+          <div class="overlay-controls">
+            <div class="checkbox-group"> 
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="new-furnished">
+                <label class="form-check-label" for="new-furnished">Furnished</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="new-full-baths">
+                <label class="form-check-label" for="new-full-baths">Full Baths</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="new-half-baths">
+                <label class="form-check-label" for="new-half-baths">Half Baths</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="new-waterfront">
+                <label class="form-check-label" for="new-waterfront">Waterfront</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="new-pool">
+                <label class="form-check-label" for="new-pool">Pool</label>
+              </div>
+              <select id="new-garage" class="form-select form-select-sm">
+                <option value="">Any Garage</option>
+                <option value="0">No Garage</option>
+                <option value="1">1 Garage</option>
+                <option value="2">2 Garages</option>
+                <option value="2+">2+ Garages</option>
+              </select>
+            </div> 
+            <button id="add-overlay" class="btn btn-secondary btn-sm">Add</button> 
+          </div>
         </div>
       </div>
       
-      <!-- Apply Filters Button -->
-      <div style="margin-left: auto;">
-        <button id="apply-filters" style="background-color: #3498db; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Apply Filters</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="content">
-    <!-- 地圖 -->
-    <div id="map"></div>
-
-    <!-- 資訊欄 -->
-    <div id="info">
-      <h3>MLS Property Details</h3>
+      <div id="chart-legend" class="chart-legend"></div>
       
-      <!-- 顯示資料 -->
-      <div id="mls-details">
-        <div class="info-section data-row">
-          <strong>MLS#:</strong> <span id="mls"> - </span>
-        </div>
-        <div class="info-section data-row">
-          <strong>Original List Price:</strong> <span id="original-price">$ - </span>
-        </div>
-        <div class="info-section data-row">
-          <strong>Last List Price:</strong> <span id="last-price">$ - </span>
-        </div>
-        <div class="info-section data-row">
-          <strong>Rented Price:</strong> <span id="rented-price">$ - </span>
+      <div style="display: grid; gap: 30px;">
+        <div>
+          <h4 id="price-chart-title" style="margin: 0 0 15px 0; text-align: center; color: #2c3e50;">Average Rented Price by Year</h4>
+          <div id="price-chart" style="width: 100%; height: 400px;"></div>
         </div>
         
-        <hr>
-
-        <!-- 顯示 Year Built 和 Square Footage -->
-        <div class="info-section data-row">
-          <strong>Year Built:</strong> <span id="year-built"> - </span>
-        </div>
-        <div class="info-section data-row">
-          <strong>Square Footage:</strong> <span id="sf-value"> - SF</span>
-        </div>
-
-        <hr>
-
-        <!-- 顯示 Pool, Waterfront, Pet allowed -->
-        <div class="info-section data-row">
-          <strong>Pool:</strong> <span id="pool-value" class="yes"> - </span>
-        </div>
-        <div class="info-section data-row">
-          <strong>Waterfront:</strong> <span id="waterfront-value" class="yes"> - </span>
-        </div>
-        <div class="info-section data-row">
-          <strong>Pet Allowed:</strong> <span id="pet-allowed-value" class="no"> - </span>
-        </div>
-
-        <hr>
-
-        <!-- 顯示 GAR 和 BE -->
-        <div class="info-section data-row">
-          <strong>GAR:</strong> <span id="gar"> - </span>
-        </div>
-        <div class="info-section data-row">
-          <strong>BE:</strong> <span id="be"> - </span>
-        </div>
-        <div class="info-section data-row">
-          <strong>BA:</strong> <span id="ba"> - </span>
-        </div>
-
-        <hr>
-
-        <!-- 顯示 Similar MLS -->
-        <div class="info-section data-row">
-          <strong>Similar:</strong> <span id="similar-mls">None</span>
-        </div>
-
-        <hr>
-
-        <!-- Comparison Feature -->
-        <div class="compare-container">
-          <div class="compare-title">Compare Properties</div>
-          
-          <div class="compare-selection" id="compare-selection">
-            <!-- Selected MLS numbers will appear here -->
-          </div>
-          
-          <div class="compare-input">
-            <input type="text" id="compare-mls-input" placeholder="Enter MLS# to compare">
-            <button id="add-to-compare" class="compare-button">Add</button>
-          </div>
-          
-          <div class="compare-buttons">
-            <button id="start-compare" class="compare-button" disabled>Compare Selected</button>
-            <button id="clear-compare" class="compare-button clear" disabled>Clear All</button>
-          </div>
+        <div>
+          <h4 id="dom-chart-title" style="margin: 0 0 15px 0; text-align: center; color: #2c3e50;">Average Days on Market by Year</h4>
+          <div id="dom-chart" style="width: 100%; height: 400px;"></div>
         </div>
       </div>
+      
+      <div style="margin-top: 20px; text-align: center;">
+        <button id="clear-all-overlays" class="btn btn-secondary btn-sm">Clear All Overlays</button>
+        <button id="reset-timeframe" class="btn btn-secondary btn-sm">Reset to Year View</button>
+      </div>
     </div>
-  </div>
+  </body>
 
-  <div class="mls-list" id="mls-list"></div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script>
+       // Global variables
+       let allData = []; 
+      let map; 
+      let markerGroup; 
+      let drawnItems; 
 
-  <script>
-    let maxYearBuilt = 0;
-    let minYearBuilt = Infinity;
-    let maxSquareFootage = 0;
-    let minSquareFootage = Infinity;
-    let allData = [];
-    let map;
-    let markerGroup;
-  
-    // 設定地圖中心為邁阿密
-    map = L.map('map').setView([25.7617, -80.1918], 12);  
-  
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }).addTo(map);
-  
-    markerGroup = L.layerGroup().addTo(map);
-  
-    // 讀取並解析 CSV 檔案
-    Papa.parse("Rental Market Research Data.csv", {
-      download: true,
-      header: true,
-      dynamicTyping: false,
-      complete: function(results) {
-        const data = results.data;
-        allData = results.data.filter(item => item['MLS#']);
+      // Chart related variables
+      let selectedAreaData = []; 
+      let currentTimeframe = 'year';
+      let selectedYear = null; 
+
+      // Chart overlay related variables
+      let chartOverlays = []; 
+      let overlayColors = [
+        '#3498db', // Main Data
+        '#e74c3c', 
+        '#2ecc71', 
+        '#f39c12', 
+        '#9b59b6', 
+        '#1abc9c', 
+        '#e67e22', 
+        '#34495e', 
+        '#7f8c8d', 
+        '#c0392b',
+        '#d35400', 
+        '#27ae60', 
+        '#c8d6e5', 
+        '#8e44ad', 
+        '#2c3e50', 
+        '#f1c40f', 
+        '#7bdcb5'  
+      ];
+      let overlayCounter = 1; // Used to generate unique IDs for overlays
+      
+      /**
+       * Initializes the Leaflet map.
+       * Sets map center, tile layer, Leaflet.Draw controls, and marker group.
+       */
+      function initMap() {
         
-        let maxPrice = 0;
-        let maxListDate = null;
-        let today = new Date();
+        L.Browser.touch = false;
 
-        allData.forEach(item => {
-          // 處理價格最大值
-          if (item['Last List Price']) {
-            let price;
-            if (typeof item['Last List Price'] === 'string') {
-              price = parseFloat(item['Last List Price'].replace(/[^\d.]/g, ''));
-            } else {
-              price = parseFloat(item['Last List Price']);
-            }
-            
-            if (!isNaN(price)) {
-              maxPrice = Math.max(maxPrice, price);
-            }
+        // Initialize the map
+        map = L.map("map").setView([25.7617, -80.1918], 12);
+        // Add OpenStreetMap tile layer
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "© OpenStreetMap",
+        }).addTo(map);
+
+        // Initialize FeatureGroup to store user-drawn shapes
+        drawnItems = new L.FeatureGroup();
+        map.addLayer(drawnItems);
+
+        // Configure Leaflet.Draw controls, only allowing rectangle drawing here
+        const drawControl = new L.Control.Draw({
+          draw: {
+            polygon: false, // Disable polygon drawing
+            polyline: false, // Disable polyline drawing
+            circle: false, // Disable circle drawing
+            marker: false, // Disable marker drawing
+            circlemarker: false, // Disable circle marker drawing
+            rectangle: true // Enable rectangle drawing
+          },
+          edit: {
+            featureGroup: drawnItems, // Allow users to edit drawn shapes
+            remove: true
           }
-          
-          // 處理列表日期，計算最大日期差
-          if (item['List Date']) {
-            const dateStr = item['List Date'];
-            const dateParts = dateStr.split('/');
-            if (dateParts.length === 3) {
-              // 格式為 MM/DD/YYYY
-              const listDate = new Date(
-                parseInt(dateParts[2]), 
-                parseInt(dateParts[0]) - 1, 
-                parseInt(dateParts[1])
-              );
+        });
+        map.addControl(drawControl);
+
+        // Initialize marker group to manage all property markers on the map
+        markerGroup = L.layerGroup().addTo(map);
+
+        // Listen for the 'draw:created' event, triggered when the user finishes drawing a shape
+        map.on('draw:created', function(e) {
+
+
+          const type = e.layerType; // Get the type of drawn shape
+          const layer = e.layer;     // Get the drawn shape's layer
+
+          if (type === 'rectangle') { // If a rectangle was drawn
+
+            const bounds = layer.getBounds(); // Get the geographic bounds (LatLngBounds) of the rectangle
+            const selectedProperties = []; // Array to store selected property data
+            
+            console.log(`Selection bounds: ${bounds.toString()}`);
+            console.log(`Total markers on map: ${markerGroup.getLayers().length}`);
+            
+            // Reset all marker styles to default blue
+            markerGroup.eachLayer(marker => {
+              marker.setIcon(L.icon({
+                iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34],
+                shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+                shadowSize: [41, 41]
+              }));
+            });
+
+            let selectedCount = 0;
+            markerGroup.eachLayer(marker => {
+              const markerLatLng = marker.getLatLng(); 
               
-              if (!isNaN(listDate.getTime())) {
-                // 計算日期與今天的差值（天數）
-                const diffTime = Math.abs(today - listDate);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              if (bounds.contains(markerLatLng)) { // Check if the marker is within the rectangle's bounds
+                selectedCount++;
+                console.log(`Marker within bounds: MLS# ${marker._mlsId}`);
                 
-                if (maxListDate === null || diffDays > maxListDate) {
-                  maxListDate = diffDays;
+                // Change the icon of the selected marker to red
+                marker.setIcon(L.icon({
+                iconUrl: 'ClickIcon.svg', // 紅色圖示
+                iconSize: [50, 50],
+                iconAnchor: [20, 40],
+                popupAnchor: [0, -40],
+                }));
+                
+                // Find the corresponding property data using the marker's ML#
+                const mlsId = marker._mlsId;
+                const property = allData.find(item => item['ML#'] === mlsId);
+                if (property) {
+                  selectedProperties.push(property); // Add property data to the selected list
+                  console.log(`Found corresponding property data: ${property.Address}`);
+                } else {
+                  console.warn(`Property data not found for MLS# ${mlsId}`);
                 }
               }
+            });
+
+            // If properties were selected, update the MLS list and display charts
+            if (selectedProperties.length > 0) {
+              updateMLSList(selectedProperties); 
+              
+              selectedAreaData = selectedProperties;
+              showChartContainer(); // Show chart container
+              
+              // Reset time frame and overlays, then update charts
+              currentTimeframe = 'year';
+              selectedYear = null;
+              chartOverlays = []; // Clear all overlays
+              overlayCounter = 1; // Reset overlay counter
+              updateOverlayList(); // Update overlay list display
+              updateChartLegend(); // Update chart legend
+              updateAnalyticsCharts(); // Update charts
+
+              alert(`Selected ${selectedProperties.length} properties`);
+            } else {
+              alert("No properties found within the selected area");
             }
+            
+            drawnItems.addLayer(layer); 
+            
           }
         });
 
-        // 設置價格的最大值為實際最大價格
-        const priceSlider = document.getElementById('price-range');
-        priceSlider.max = maxPrice;
-        priceSlider.value = 2600; // 預設顯示全部價格範圍
-        
-        // 設置入住天數滑塊的最大值為實際最大天數，但至少為90天
-        const moveInSlider = document.getElementById('move-in-day');
-        moveInSlider.max = Math.max(maxListDate || 2000, 2000);
-        moveInSlider.value = 2000; // 預設顯示全部日期範圍
-        
-        // 更新顯示的數值
-        updateFilterDisplay();
-            
-        // Initialize SF input with a reasonable default
-        document.getElementById('sf').value = 1000;
-  
-        // Apply initial filters to show some data
-        applyFilters();
       }
-    });
-  
-    // 根據選中的 MLS# 更新右側的詳細資料
-    function updateInfo(item) {
-      if (!item) return;
+      // Initialize the map after the DOM content is fully loaded
+      document.addEventListener('DOMContentLoaded', initMap);
       
-      document.getElementById('mls').textContent = item['MLS#'] || 'N/A';
-      document.getElementById('original-price').textContent = item['Original List Price'] ? `${item['Original List Price']}` : 'N/A';
-      document.getElementById('last-price').textContent = item['Last List Price'] ? `${item['Last List Price']}` : 'N/A';
-      document.getElementById('rented-price').textContent = item['Rented Price'] ? `${item['Rented Price']}` : 'N/A';
-      document.getElementById('year-built').textContent = item['Year Built'] || 'N/A';
-      document.getElementById('sf-value').textContent = item['SF'] ? `${item['SF']} SF` : 'N/A';
-  
-      // 根據 "Yes" / "No" 字符串來設定 Pool, Waterfront, Pets Allowed
-      document.getElementById('pool-value').textContent = item['Pool'] === "Yes" ? 'Yes' : 'No';
-      document.getElementById('pool-value').className = item['Pool'] === "Yes" ? 'yes' : 'no';
-      
-      document.getElementById('waterfront-value').textContent = item['Waterfront'] === "Yes" ? 'Yes' : 'No';
-      document.getElementById('waterfront-value').className = item['Waterfront'] === "Yes" ? 'yes' : 'no';
-      
-      document.getElementById('pet-allowed-value').textContent = item['Pets Allowed'] === "Yes" ? 'Yes' : 'No';
-      document.getElementById('pet-allowed-value').className = item['Pets Allowed'] === "Yes" ? 'yes' : 'no';
-  
-      document.getElementById('gar').textContent = item['GAR'] || 'N/A';
-      document.getElementById('be').textContent = item['BE'] || 'N/A';
-      document.getElementById('ba').textContent = item['BA'] || 'N/A';
-
-      // 尋找相似的資料 - 使用 requestAnimationFrame 避免阻塞 UI
-      requestAnimationFrame(() => {
-        // 顯示計算中的提示
-        document.getElementById('similar-mls').textContent = "loading...";
+      function updateMLSList(data) {
+        const listDiv = document.getElementById("mls-list");
+        listDiv.innerHTML = ""; 
         
-        // 使用 setTimeout 將計算推遲到下一個事件循環
-        setTimeout(() => {
-          const similarProperties = findSimilarProperties(item, allData);
-
-          // 顯示相似物業 MLS 號碼
-          if (similarProperties.length > 0) {
-            // Create a container div with flex display like the MLS list
-            const similarContainer = document.createElement('div');
-            similarContainer.style.display = 'flex';
-            similarContainer.style.flexWrap = 'wrap';
-            similarContainer.style.gap = '8px';
-            similarContainer.style.marginTop = '8px';
+        data.forEach((it) => {
+          const div = document.createElement("div");
+          div.className = "mls-item";
+          div.textContent = it["ML#"];
+          div.onclick = async () => {
+            try {
+              // Copy MLS# to clipboard on click
+              await navigator.clipboard.writeText(it["ML#"]);
+              alert("Copied " + it["ML#"] + " to clipboard");
+            } catch (err) {
+              console.error("Copy failed:", err);
+              // Fallback for older browsers or if clipboard API fails
+              const textArea = document.createElement("textarea");
+              textArea.value = it["ML#"];
+              document.body.appendChild(textArea);
+              textArea.select();
+              document.execCommand('copy');
+              document.body.removeChild(textArea);
+              alert("Copied " + it["ML#"] + " to clipboard (fallback)");
+            }
             
-            // Add similar properties as boxes
-            similarProperties.forEach(p => {
-              const similarItemDiv = document.createElement('div');
-              similarItemDiv.className = 'mls-item similar-mls-item';
-              similarItemDiv.dataset.mls = p.property['MLS#'];
-              similarItemDiv.textContent = p.property['MLS#'];
-              similarItemDiv.style.backgroundColor = '#e0e0e0';
-              similarItemDiv.style.padding = '6px 10px';
-              similarItemDiv.style.borderRadius = '4px';
-              similarItemDiv.style.cursor = 'pointer';
-              similarItemDiv.style.fontSize = '14px';
-              
-              // Add tooltip with similarity score
-              const scorePct = p.score.toFixed(0);
-              similarItemDiv.title = `相似度: ${scorePct}%`;
-              
-              // Add click handler
-              similarItemDiv.addEventListener('click', () => {
-                // 查找對應的物業
-                const mlsId = p.property['MLS#'];
-                const property = allData.find(prop => prop['MLS#'] === mlsId);
-                
-                if (property) {
-                  // 更新右邊的資訊
-                  updateInfo(property);
-                  
-                  // 將選取到的座標變成紅色的
-                  if (markerGroup) {
-                    markerGroup.getLayers().forEach(marker => {
-                      if (marker._mlsId === mlsId) {
-                        // 觸發標記的點擊事件
-                        marker.fire('click');
-                      }
-                    });
-                  }
-                  
-                  // 高亮 MLS 列表中的對應項
-                  highlightMLSItem(mlsId);
+            try {
+              // Attempt to geocode address and locate the marker on the map
+              const [lat, lon] = await geocodeAddress(it.Address);
+              markerGroup.eachLayer((m) => {
+                const markerLatLng = m.getLatLng();
+                // Check if marker's lat/lng matches geocoded result (allowing for tiny floating point errors)
+                if (Math.abs(markerLatLng.lat - lat) < 0.0001 && Math.abs(markerLatLng.lng - lon) < 0.0001) {
+                  // Call marker's click event handler to update info and highlight
+                  onMarkerClick.call(m, { target: m, latlng: m.getLatLng() });
                 }
               });
-              
-              similarContainer.appendChild(similarItemDiv);
-            });
-            
-            // Replace the content with our new container
-            const similarMlsElement = document.getElementById('similar-mls');
-            similarMlsElement.innerHTML = '';
-            similarMlsElement.appendChild(similarContainer);
-          } else {
-            document.getElementById('similar-mls').textContent = "No similar properties";
-          }
-        }, 0);
-      });
-      
-    }
-
-    function applyFilters() {
-      
-      const maxPrice = parseFloat(document.getElementById('price-range').value);
-      const maxMoveInDays = parseInt(document.getElementById('move-in-day').value);
-      const minBedrooms = parseInt(document.getElementById('bedrooms').value);
-      const minSf = parseInt(document.getElementById('sf').value);
-      const poolRequired = document.getElementById('pool').checked;
-      const waterfrontRequired = document.getElementById('waterfront').checked;
-      const petAllowedRequired = document.getElementById('pet-allowed').checked;      
-      
-      // 計算今天的日期，用於比較 List Date
-      const today = new Date();
-      
-      // 篩選數據
-      const filteredData = allData.filter(item => {
-        if (!item || !item['MLS#']) {
-          return false;
-        }
-        
-        // 1. price
-        let price = null;
-        if (item['Last List Price']) {
-          if (typeof item['Last List Price'] === 'string') {
-            price = parseFloat(item['Last List Price'].replace(/[^0-9.]/g, ''));
-          } else {
-            price = parseFloat(item['Last List Price']);
-          }
-        }
-        
-        if (isNaN(price) || price > maxPrice) {
-          return false;
-        }
-        
-        // 2. move in day 
-        if (maxMoveInDays > 0 && item['List Date']) {
-          const dateStr = item['List Date'];
-          const dateParts = dateStr.split('/');
-          if (dateParts.length === 3) {
-            // MM/DD/YYYY
-            const listDate = new Date(
-              parseInt(dateParts[2]), 
-              parseInt(dateParts[0]) - 1,//JavaScript 月份從 0 開始
-              parseInt(dateParts[1])
-            );
-            
-            if (!isNaN(listDate.getTime())) {
-              // 計算日期與今天的差值（天數）
-              const diffTime = Math.abs(today - listDate);
-              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-              
-              // 如果列表日期超過指定天數，過濾掉
-              if (diffDays > maxMoveInDays) {
-                return false;
-              }
+            } catch (err) {
+              console.warn(`Could not geocode or locate address: ${it.Address}`, err);
             }
-          }
-        }
-      // 3. be
-      let bedrooms = null;
-      if (item['BE']) {
-        bedrooms = parseInt(item['BE']);
+          };
+          listDiv.append(div);
+        });
       }
       
-      if (isNaN(bedrooms) || bedrooms < minBedrooms) {
-        return false;
+      /**
+       * Handles map marker click events.
+       * @param {Object} e - Event object.
+       */
+      function onMarkerClick(e) {
+        map.setView(e.latlng, 17, { animate: true }); // Set map view to marker location and zoom
+        e.target.openPopup(); // Open the marker's popup
       }
-      
-      // 4. SF
-      let squareFeet = null;
-      if (item['SF']) {
-        if (typeof item['SF'] === 'string') {
-          squareFeet = parseFloat(item['SF'].replace(/[^0-9.]/g, ''));
-        } else {
-          squareFeet = parseFloat(item['SF']);
-        }
-      }
-      
-      if (isNaN(squareFeet) || squareFeet < minSf) {
-        return false;
-      }
-      
-      // 5. check box
-      if (poolRequired && item['Pool'] !== "Yes") {
-        return false;
-      }
-      
-      if (waterfrontRequired && item['Waterfront'] !== "Yes") {
-        return false;
-      }
-      
-      if (petAllowedRequired && item['Pets Allowed'] !== "Yes") {
-        return false;
-      }
-      
-      // 通過所有篩選條件
-      return true;
-    });
-    
-    // 更新顯示
-    updateMapMarkers(filteredData);
-    updateMLSList(filteredData);
-    
-    // 如果沒有資料，顯示提示
-    if (filteredData.length === 0) {
-      alert("There are no records matching your filter criteria. Please adjust your filter criteria.");
-    }
-  }
 
-    function updateMapMarkers(filteredData) {
-    // Clear existing markers
-    if (markerGroup) {
-      map.removeLayer(markerGroup);
-    }
-    
-    markerGroup = L.layerGroup().addTo(map);
-    
-    // Keep track of selected marker
-    let selectedMarker = null;
-    
-    // 隨機生成座標位置(需要改成自己的x,y值)
-    filteredData.forEach(item => {
-      const seed = parseInt(item['MLS#'].replace(/\D/g, '') || '0') % 100000;
-      const pseudoRandom = (seed / 100000) * 2 - 1; // -1 to 1 range
-      
-      const lat = 25.7617 + pseudoRandom * 0.05;
-      const lng = -80.1918 + (pseudoRandom * 1.5) * 0.05;
-      
-      // Create a marker with default icon
-      const defaultIcon = L.icon({
-        iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
-        shadowSize: [41, 41]
+      /**
+       * Converts an address to latitude and longitude.
+       * @param {string} address - The address string to geocode.
+       * @returns {Promise<[number, number]>} - A Promise containing [latitude, longitude].
+       */
+      async function geocodeAddress(address) {
+        const clean = address.replace(/\s+Unit.*$/i, ""); // Clean address string
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+            clean
+          )}`
+        );
+        const arr = await res.json();
+        if (!arr.length) throw new Error("No geocode"); // Throw error if no results
+        return [parseFloat(arr[0].lat), parseFloat(arr[0].lon)]; // Return lat/lng
+      }
+
+      // Use PapaParse to load the CSV file
+      Papa.parse("data.csv", {
+        download: true, // Allow downloading from URL
+        header: true, // Use the first row as headers
+        delimiter: ";", // Set delimiter to semicolon (based on your CSV format)
+        complete: (results) => {
+          allData = results.data.filter((r) => r["ML#"]); // Filter out data without ML#
+          initFilters(); // Initialize filters
+          applyFilters(); // Apply initial filters
+          // initCompare(); // Comparison feature is commented out in HTML
+        },
       });
-      
-      // Create red icon for selected state
-      const redIcon = L.icon({
-        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
-        shadowSize: [41, 41]
-      });
-      
-      const marker = L.marker([lat, lng], {icon: defaultIcon}).addTo(markerGroup);
-      marker._mlsId = item['MLS#']; 
-      
-      marker.bindPopup(`
-        <b>MLS#: ${item['MLS#']}</b><br>
-        Year Built: ${item['Year Built']}<br>
-        Price: ${item['Last List Price']}<br>
-        SF: ${item['SF']}<br>
-      `);
-      
-      // Add click handler to show details and change marker color
-      marker.on('click', function() {
-        // Reset previous selected marker if exists
-        if (selectedMarker) {
-          selectedMarker.setIcon(defaultIcon);
-        }
-        
-        // Set this marker as selected
-        marker.setIcon(redIcon);
-        selectedMarker = marker;
-        
-        // Update info and highlight corresponding MLS item
-        updateInfo(item);
-        highlightMLSItem(item['MLS#']);
-      });
-    });
-  }
 
-  // 尋找相似的房屋資料
-  function findSimilarProperties(selectedProperty, allProperties, threshold = 90) {
-    // 排除自身
-    const otherProperties = allProperties.filter(p => p['MLS#'] !== selectedProperty['MLS#']);
-    
-    // 計算每個房屋與選定房屋的相似度
-    const similarProperties = otherProperties.map(property => {
-      const similarityScore = calculateSimilarity(selectedProperty, property);
-      return {
-        property: property,
-        score: similarityScore
-      };
-    });
-    
-    // 根據相似度分數排序
-    similarProperties.sort((a, b) => b.score - a.score);
-    
-    // 返回相似度超過threshold的房屋
-    return similarProperties.filter(item => item.score >= threshold);
-  }
-
-  function calculateSimilarity(property1, property2) {
-    let similarityScore = 0;
-    let totalWeight = 0;
-    
-    // 1. Last List Price (權重: 30%)
-    if (property1['Last List Price'] && property2['Last List Price']) {
-      const price1 = parseFloat(property1['Last List Price'].toString().replace(/[^\d.]/g, ''));
-      const price2 = parseFloat(property2['Last List Price'].toString().replace(/[^\d.]/g, ''));
-      
-      if (!isNaN(price1) && !isNaN(price2)) {
-        const priceRange = price1 * 0.05; // 5% 的價格範圍
-        const priceDiff = Math.abs(price1 - price2);
+      /**
+       * Initializes filter dropdowns.
+       * Populates options for county, city, pool, waterfront, etc.
+       */
+      function initFilters() {
+        const cSel = document.getElementById("county"),
+          citySel = document.getElementById("city");
+        // Populate county options
+        [...new Set(allData.map((d) => d.County))].forEach((c) =>
+          cSel.append(new Option(c, c))
+        );
+        // Populate city options
+        [...new Set(allData.map((d) => d.City))].forEach((c) =>
+          citySel.append(new Option(c, c))
+        );
         
-        if (priceDiff <= priceRange) {
-          // 計算價格匹配度 (0-1)
-          const priceMatch = 1 - (priceDiff / priceRange);
-          similarityScore += priceMatch * 30;
-        }
-        totalWeight += 30;
-      }
-    }
-    
-    // 2. Year Built (權重: 15%)
-    if (property1['Year Built'] && property2['Year Built']) {
-      const year1 = parseInt(property1['Year Built']);
-      const year2 = parseInt(property2['Year Built']);
-      
-      if (!isNaN(year1) && !isNaN(year2)) {
-        const yearDiff = Math.abs(year1 - year2);
+        const poolSel = document.getElementById("pool-filter");
+        poolSel.append(new Option("Any", "")); // Add "Any" option
+        // Populate pool options
+        [...new Set(allData.map((d) => d["Pool YN"]).filter(Boolean))].forEach(
+          (v) => poolSel.append(new Option(v === "Yes" ? "Pool" : "No Pool", v))
+        );
         
-        if (yearDiff <= 5) {
-          // 計算年份匹配度 (0-1)
-          const yearMatch = 1 - (yearDiff / 5);
-          similarityScore += yearMatch * 15;
-        }
-        totalWeight += 15;
-      }
-    }
-    
-    // 3. SF Square Footage (權重: 25%)
-    if (property1['SF'] && property2['SF']) {
-      const sf1 = parseFloat(property1['SF'].toString().replace(/[^\d.]/g, ''));
-      const sf2 = parseFloat(property2['SF'].toString().replace(/[^\d.]/g, ''));
-      
-      if (!isNaN(sf1) && !isNaN(sf2)) {
-        const sfRange = sf1 * 0.1; // 10% 的面積範圍
-        const sfDiff = Math.abs(sf1 - sf2);
+        const wfSel = document.getElementById("waterfront-filter");
+        wfSel.append(new Option("Any", "")); // Add "Any" option
+        // Populate waterfront options
+        [
+          ...new Set(
+            allData.map((d) => d["Waterfront Property (Y/N)"]).filter(Boolean)
+          ),
+        ].forEach((v) =>
+          wfSel.append(new Option(v === "Yes" ? "On Water" : "Not On Water", v))
+        );
         
-        if (sfDiff <= sfRange) {
-          // 計算面積匹配度 (0-1)
-          const sfMatch = 1 - (sfDiff / sfRange);
-          similarityScore += sfMatch * 25;
-        }
-        totalWeight += 25;
-      }
-    }
-    
-    // 4. Pool, Waterfront, Pet Allowed (每個權重: 10%)
-    const binaryProperties = ['Pool', 'Waterfront', 'Pets Allowed'];
-    
-    binaryProperties.forEach(prop => {
-      if (property1[prop] !== undefined && property2[prop] !== undefined) {
-        if (property1[prop] === property2[prop]) {
-          similarityScore += 10;
-        }
-        totalWeight += 10;
-      }
-    });
-    
-    // 計算最終相似度百分比 (0-100)
-    return totalWeight > 0 ? (similarityScore / totalWeight) * 100 : 0;
-  }
-
-
-  // Function to highlight the selected MLS item in the list
-  function highlightMLSItem(mlsId) {
-    // Remove highlight from all items
-    const allItems = document.querySelectorAll('.mls-item');
-    allItems.forEach(item => {
-      item.classList.remove('selected');
-    });
-    
-    // Add highlight to the matching item
-    const selectedItem = document.querySelector(`.mls-item[data-mls="${mlsId}"]`);
-    if (selectedItem) {
-      selectedItem.classList.add('selected');
-    }
-  }
-
-  function updateMLSList(filteredData) {
-    const mlsListDiv = document.getElementById('mls-list');
-    mlsListDiv.innerHTML = ''; // Clear existing items
-    
-    // Constants for pagination
-    const itemsPerPage = 42; // 一頁42個MLS
-    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-    let currentPage = 1;
-    
-    // Create pagination controls container
-    const paginationContainer = document.createElement('div');
-    paginationContainer.className = 'pagination-controls';
-    paginationContainer.style.display = 'flex';
-    paginationContainer.style.justifyContent = 'center';
-    paginationContainer.style.margin = '10px 0';
-    paginationContainer.style.gap = '10px';
-    
-    // Function to render items for the current page
-    function renderPage(page) {
-      // Clear current items
-      mlsListDiv.innerHTML = '';
-      
-      // Calculate start and end indices for current page
-      const startIndex = (page - 1) * itemsPerPage;
-      const endIndex = Math.min(startIndex + itemsPerPage, filteredData.length);
-      
-      // Create container for MLS items with proper styling
-      const itemsContainer = document.createElement('div');
-      itemsContainer.style.display = 'flex';
-      itemsContainer.style.flexWrap = 'wrap';
-      itemsContainer.style.gap = '10px';
-      itemsContainer.style.justifyContent = 'flex-start';
-      
-      // Render MLS items for current page
-      for (let i = startIndex; i < endIndex; i++) {
-        const item = filteredData[i];
+        // Add 'change' event listeners to all filters to apply filters when values change
+        [
+          "county",
+          "city",
+          "property-type",
+          "rented-year",
+          "bedrooms",
+          "sf-range",
+          "pool-filter",
+          "waterfront-filter",
+        ].forEach((id) =>
+          document.getElementById(id).addEventListener("change", applyFilters)
+        );
         
-        const mlsItemDiv = document.createElement('div');
-        mlsItemDiv.className = 'mls-item';
-        mlsItemDiv.dataset.mls = item['MLS#']; 
-        mlsItemDiv.textContent = item['MLS#'];
-        
-        // Style the MLS items
-        mlsItemDiv.style.backgroundColor = '#e0e0e0';
-        mlsItemDiv.style.padding = '8px 12px';
-        mlsItemDiv.style.borderRadius = '4px';
-        mlsItemDiv.style.cursor = 'pointer';
-        mlsItemDiv.style.minWidth = '80px';
-        mlsItemDiv.style.textAlign = 'center';
-        
-        mlsItemDiv.onclick = function() {
-          // Remove highlight from all items
-          document.querySelectorAll('.mls-item').forEach(el => {
-            el.classList.remove('selected');
+        // Special handling for property type filter to show/hide pool filter
+        document
+          .getElementById("property-type")
+          .addEventListener("change", () => {
+            const showPool = [
+              ...document.getElementById("property-type").selectedOptions,
+            ].some((o) => o.value === "Single-Family Home");
+            document.getElementById("pool-container").style.display = showPool
+              ? "block"
+              : "none";
+            applyFilters(); // Apply filters
           });
-          
-          // Add highlight to this item
-          mlsItemDiv.classList.add('selected');
-          
-          // Update info and change marker color
-          updateInfo(item);
-          
-          // Find and highlight the corresponding marker
-          if (markerGroup) {
-            markerGroup.getLayers().forEach(marker => {
-              if (marker._mlsId === item['MLS#']) {
-                // Reset all markers first
-                markerGroup.getLayers().forEach(m => {
-                  m.setIcon(L.icon({
-                    iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
-                    iconSize: [25, 41],
-                    iconAnchor: [12, 41],
-                    popupAnchor: [1, -34],
-                    shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
-                    shadowSize: [41, 41]
-                  }));
-                });
-                
-                // Highlight this marker
-                marker.setIcon(L.icon({
-                  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-                  iconSize: [25, 41],
-                  iconAnchor: [12, 41],
-                  popupAnchor: [1, -34],
-                  shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
-                  shadowSize: [41, 41]
-                }));
-              }
-            });
+      }
+
+      /**
+       * Applies filters based on current filter settings.
+       * Filters `allData` and updates map markers and list.
+       */
+      function applyFilters() {
+        const selC = [...document.getElementById("county").selectedOptions].map(
+            (o) => o.value
+          ),
+          selCity = [...document.getElementById("city").selectedOptions].map(
+            (o) => o.value
+          ),
+          selT = [
+            ...document.getElementById("property-type").selectedOptions,
+          ].map((o) => o.value),
+          y = document.getElementById("rented-year").value,
+          b = document.getElementById("bedrooms").value,
+          sf = document.getElementById("sf-range").value,
+          pool = document.getElementById("pool-filter").value,
+          wf = document.getElementById("waterfront-filter").value;
+        
+        const filtered = allData.filter((item) => {
+          if (selC.length && !selC.includes(item.County)) return false;
+          if (selCity.length && !selCity.includes(item.City)) return false;
+          if (selT.length && !selT.includes(item["Property Type"]))
+            return false;
+          if (y) {
+            const d = new Date(item["Rented Date"]);
+            if (isNaN(d) || d.getFullYear().toString() !== y) return false;
           }
-        };
-        
-        itemsContainer.appendChild(mlsItemDiv);
+          if (b && !matchRange(+item.Bedrooms, b)) return false;
+          if (sf && !matchRange(+item["Square feet"], sf)) return false;
+          if (
+            document.getElementById("pool-container").style.display ===
+              "block" &&
+            pool &&
+            item["Pool YN"] !== pool
+          )
+            return false;
+          if (wf && item["Waterfront Property (Y/N)"] !== wf) return false;
+          return true;
+        });
+        renderMap(filtered); // Render map markers
+        renderList(filtered); // Render MLS list
       }
-      
-      mlsListDiv.appendChild(itemsContainer);
-      updatePaginationControls();
-      
-      // Show property count
-      const countDiv = document.createElement('div');
-      countDiv.style.textAlign = 'center';
-      countDiv.style.marginTop = '10px';
-      countDiv.style.fontSize = '14px';
-      countDiv.style.color = '#666';
-      countDiv.textContent = `Showing ${startIndex + 1}-${endIndex} of ${filteredData.length} properties`;
-      mlsListDiv.appendChild(countDiv);
-    }
-    
-    // Function to update pagination controls
-    function updatePaginationControls() {
-      paginationContainer.innerHTML = '';
-      
-      // Only show pagination if we have more than one page
-      if (totalPages <= 1) {
-        return;
-      }
-      
-      // Previous button
-      const prevButton = document.createElement('button');
-      prevButton.innerHTML = '&laquo;';
-      prevButton.disabled = currentPage === 1;
-      prevButton.style.padding = '5px 10px';
-      prevButton.style.borderRadius = '4px';
-      prevButton.style.border = '1px solid #ddd';
-      prevButton.style.backgroundColor = currentPage === 1 ? '#f0f0f0' : '#fff';
-      prevButton.style.cursor = currentPage === 1 ? 'default' : 'pointer';
-      prevButton.onclick = function() {
-        if (currentPage > 1) {
-          currentPage--;
-          renderPage(currentPage);
+
+      /**
+       * Checks if a value matches a range rule.
+       * @param {number} val - The value to check.
+       * @param {string} rule - The range rule string (e.g., "1000-2000", "2+", ">5000").
+       * @returns {boolean} - True if the value matches the rule, false otherwise.
+       */
+      function matchRange(val, rule) {
+        if (rule.includes("-")) {
+          const [min, max] = rule.split("-").map(Number);
+          return val >= min && val <= max;
         }
-      };
-      paginationContainer.appendChild(prevButton);
-      
-      // Page numbers
-      const maxPageButtons = 10; 
-      let startPage = Math.max(1, currentPage - Math.floor(maxPageButtons / 2));
-      let endPage = Math.min(totalPages, startPage + maxPageButtons - 1);
-      
-      // Adjust startPage if we're near the end
-      if (endPage - startPage + 1 < maxPageButtons) {
-        startPage = Math.max(1, endPage - maxPageButtons + 1);
+        if (rule.endsWith("+")) return val >= parseInt(rule);
+        if (rule.startsWith("<")) return val < parseFloat(rule.slice(1));
+        if (rule.startsWith(">")) return val > parseFloat(rule.slice(1));
+        return val === parseFloat(rule);
       }
-      
-      // First page button (if not in range)
-      if (startPage > 1) {
-        const firstButton = document.createElement('button');
-        firstButton.textContent = '1';
-        firstButton.style.padding = '5px 10px';
-        firstButton.style.borderRadius = '4px';
-        firstButton.style.border = '1px solid #ddd';
-        firstButton.style.backgroundColor = '#fff';
-        firstButton.style.cursor = 'pointer';
-        firstButton.onclick = function() {
-          currentPage = 1;
-          renderPage(currentPage);
-        };
-        paginationContainer.appendChild(firstButton);
-        
-        // Ellipsis if needed
-        if (startPage > 2) {
-          const ellipsis = document.createElement('span');
-          ellipsis.textContent = '...';
-          ellipsis.style.padding = '5px';
-          paginationContainer.appendChild(ellipsis);
-        }
-      }
-      
-      // Page buttons
-      for (let i = startPage; i <= endPage; i++) {
-        const pageButton = document.createElement('button');
-        pageButton.textContent = i;
-        pageButton.style.padding = '5px 10px';
-        pageButton.style.borderRadius = '4px';
-        pageButton.style.border = '1px solid #ddd';
-        pageButton.style.backgroundColor = i === currentPage ? '#3498db' : '#fff';
-        pageButton.style.color = i === currentPage ? '#fff' : '#000';
-        pageButton.style.cursor = i === currentPage ? 'default' : 'pointer';
-        pageButton.onclick = function() {
-          currentPage = i;
-          renderPage(currentPage);
-        };
-        paginationContainer.appendChild(pageButton);
-      }
-      
-      // Ellipsis and last page if needed
-      if (endPage < totalPages) {
-        if (endPage < totalPages - 1) {
-          const ellipsis = document.createElement('span');
-          ellipsis.textContent = '...';
-          ellipsis.style.padding = '5px';
-          paginationContainer.appendChild(ellipsis);
+
+      /**
+       * Renders markers on the map.
+       * @param {Array<Object>} data - Array of property data to render.
+       */
+      async function renderMap(data) {
+        // Clear all existing markers from the marker group
+        if (markerGroup) {
+          markerGroup.clearLayers();
         }
         
-        const lastButton = document.createElement('button');
-        lastButton.textContent = totalPages;
-        lastButton.style.padding = '5px 10px';
-        lastButton.style.borderRadius = '4px';
-        lastButton.style.border = '1px solid #ddd';
-        lastButton.style.backgroundColor = '#fff';
-        lastButton.style.cursor = 'pointer';
-        lastButton.onclick = function() {
-          currentPage = totalPages;
-          renderPage(currentPage);
-        };
-        paginationContainer.appendChild(lastButton);
-      }
-      
-      // Next button
-      const nextButton = document.createElement('button');
-      nextButton.innerHTML = '&raquo;';
-      nextButton.disabled = currentPage === totalPages;
-      nextButton.style.padding = '5px 10px';
-      nextButton.style.borderRadius = '4px';
-      nextButton.style.border = '1px solid #ddd';
-      nextButton.style.backgroundColor = currentPage === totalPages ? '#f0f0f0' : '#fff';
-      nextButton.style.cursor = currentPage === totalPages ? 'default' : 'pointer';
-      nextButton.onclick = function() {
-        if (currentPage < totalPages) {
-          currentPage++;
-          renderPage(currentPage);
-        }
-      };
-      paginationContainer.appendChild(nextButton);
-      
-      mlsListDiv.appendChild(paginationContainer);
-    }
-    
-    // Initial render
-    if (filteredData.length > 0) {
-      renderPage(currentPage);
-    } else {
-      const noResultsDiv = document.createElement('div');
-      noResultsDiv.textContent = 'No properties match your filters';
-      noResultsDiv.style.padding = '10px';
-      noResultsDiv.style.textAlign = 'center';
-      mlsListDiv.appendChild(noResultsDiv);
-    }
-  }
+        for (const it of data) {
+          try {
+            // Geocode the address to get latitude and longitude
+            const [lat, lon] = await geocodeAddress(it.Address);
+            // Create popup content
+            const popupContent = `<b>MLS#: ${it["ML#"]}</b><br>List: ${it["List Price"]}<br>Rented: ${it["Rented Price"]} (${it["Rented Date"]})<br>Beds: ${it.Bedrooms}, Baths: ${it["Full Baths"]}/${it["Half baths"]}<br>SF: ${it["Square feet"]}<br>Pool: ${it["Pool YN"]}<br>Waterfront: ${it["Waterfront Property (Y/N)"]}<br>${it.Address}`;
+            
+            // 3) 取出該筆資料的 "Calculated DOM"，並轉成數字
+      const domRaw = it['ADOM'] || '0';
+      const domValue = parseFloat(domRaw.toString().replace(/,/g, '')) || 0;
 
-    // Update the filter display to show current values
-    function updateFilterDisplay() {
-      const priceValue = document.getElementById('price-range').value;
-      document.getElementById('price-display').textContent = `${priceValue}`;
-      
-      const moveInValue = document.getElementById('move-in-day').value;
-      document.getElementById('move-in-display').textContent = `${moveInValue} days`;
-    }
+      // 4) 根據 domValue 決定矩形小塊的高度
+      let rectHeight = 0;
+      if (domValue > 92)       { rectHeight = 32; }
+      else if (domValue > 63)  { rectHeight = 24; }
+      else if (domValue > 45)  { rectHeight = 16; }
+      else if (domValue > 31)  { rectHeight = 8; }
 
-    // Add event listeners for filter inputs
-    document.getElementById('price-range').addEventListener('input', updateFilterDisplay);
-    document.getElementById('move-in-day').addEventListener('input', updateFilterDisplay);
-    document.getElementById('apply-filters').addEventListener('click', applyFilters);
-
-    // Call this function to initialize filter displays
-    updateFilterDisplay();
-
-
-    // Comparison Feature Implementation
-    let compareList = [];
-    const maxCompareItems = 8;
-
-    // Initialize comparison feature
-    function initCompareFeature() {
-      // Add event listeners for comparison buttons
-      document.getElementById('add-to-compare').addEventListener('click', addToCompare);
-      document.getElementById('start-compare').addEventListener('click', startCompare);
-      document.getElementById('clear-compare').addEventListener('click', clearCompare);
-      
-      // Add event listener for Enter key in the input field
-      document.getElementById('compare-mls-input').addEventListener('keyup', function(event) {
-        if (event.key === "Enter") {
-          addToCompare();
-        }
+      // 5) 用 L.divIcon 建立一個帶綠色矩形的動態 icon
+      const defaultIcon = L.divIcon({
+        className: '',  // 如果需要自訂 CSS class，可自行填寫
+        html: `
+          <div style="
+            width: 40px;
+            height: ${40 + rectHeight}px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0;
+            margin: 0;
+          ">
+            <img src="DefaultIcon.svg" style="
+              width: 40px;
+              height: 40px;
+              display: block;
+              margin: 0;
+              padding: 0;
+            " />
+            <div style="
+              width: 27.2px;
+              height: ${rectHeight}px;
+              background-color: #439638;
+              margin-top: -6px;
+            "></div>
+          </div>
+        `,
+        iconAnchor: [20, 40 + rectHeight],       // 底部中心為錨點
+        popupAnchor: [0, -(40 + rectHeight)],    // Popup 往上偏移對齊
       });
-      
-      // Load previously selected MLS numbers from localStorage if available
-      const savedCompareList = localStorage.getItem('compareList');
-      if (savedCompareList) {
-        compareList = JSON.parse(savedCompareList);
-        updateCompareSelection();
+
+            // Create marker and bind popup and click event
+            const marker = L.marker([lat, lon], { icon: defaultIcon })
+              .bindPopup(popupContent)
+              .on("click", onMarkerClick);
+            
+            // Important: Store MLS# on the marker object for later identification
+            marker._mlsId = it["ML#"];
+            
+            // Add the marker to the markerGroup
+            markerGroup.addLayer(marker);
+            
+          } catch(e) {
+            console.warn(`Could not geocode address: ${it.Address}`, e);
+          }
+        }
       }
-    }
 
-    // Add MLS to comparison list
-    function addToCompare() {
-      const input = document.getElementById('compare-mls-input');
-      const mlsId = input.value.trim();
-      
-      if (!mlsId) {
-        alert("Please enter an MLS number");
-        return;
+      /**
+       * Renders properties in the MLS list.
+       * @param {Array<Object>} data - Array of property data to render.
+       */
+      function renderList(data) {
+        const listDiv = document.getElementById("mls-list");
+        listDiv.innerHTML = ""; // Clear existing list
+        data.forEach((it) => {
+          const div = document.createElement("div");
+          div.className = "mls-item";
+          div.textContent = it["ML#"];
+          div.onclick = async () => {
+            try {
+              await navigator.clipboard.writeText(it["ML#"]);
+              alert("Copied " + it["ML#"] + " to clipboard");
+            } catch (err) {
+              console.error("Copy failed:", err);
+              // Fallback for older browsers or if clipboard API fails
+              const textArea = document.createElement("textarea");
+              textArea.value = it["ML#"];
+              document.body.appendChild(textArea);
+              textArea.select();
+              document.execCommand('copy');
+              document.body.removeChild(textArea);
+              alert("Copied " + it["ML#"] + " to clipboard (fallback)");
+            }
+            try {
+              const [lat, lon] = await geocodeAddress(it.Address);
+              // Iterate through markers in markerGroup to find a match and trigger click event
+              markerGroup.eachLayer((m) => {
+                const markerLatLng = m.getLatLng();
+                if (Math.abs(markerLatLng.lat - lat) < 0.0001 && Math.abs(markerLatLng.lng - lon) < 0.0001) {
+                  onMarkerClick.call(m, { target: m, latlng: m.getLatLng() });
+                }
+              });
+            } catch (err) {
+              console.warn(`Could not geocode or locate address: ${it.Address}`, err);
+            }
+          };
+          listDiv.append(div);
+        });
       }
-      
-      // Check if MLS already exists in the comparison list
-      if (compareList.includes(mlsId)) {
-        alert(`MLS# ${mlsId} is already in your comparison list`);
-        input.value = '';
-        return;
+
+      /**
+       * Initializes the property comparison feature.
+       */
+      // function initCompare() {
+      //   let compareList = [];
+      //   const inp = document.getElementById("compare-mls-input");
+      //   document.getElementById("add-to-compare").onclick = () => {
+      //     const m = inp.value.trim();
+      //     if (m && !compareList.includes(m)) compareList.push(m);
+      //     update();
+      //     inp.value = "";
+      //   };
+      //   document.getElementById("start-compare").onclick = () => {
+      //     if (compareList.length > 1)
+      //       window.open(
+      //         "comparison.html?mls=" + compareList.join(","),
+      //         "_blank"
+      //       );
+      //   };
+      //   document.getElementById("clear-compare").onclick = () => {
+      //     compareList = [];
+      //     update();
+      //   };
+      //   function update() {
+      //     const sel = document.getElementById("compare-selection");
+      //     sel.innerHTML = "";
+      //     compareList.forEach((m) => {
+      //       const badge = document.createElement("span");
+      //       badge.className = "badge bg-primary me-1";
+      //       badge.textContent = m;
+      //       sel.append(badge);
+      //     });
+      //     document.getElementById("start-compare").disabled =
+      //       compareList.length < 2;
+      //     document.getElementById("clear-compare").disabled =
+      //       compareList.length === 0;
+      //   }
+      // }
+
+      /**
+       * Shows the chart container.
+       */
+      function showChartContainer() {
+        document.getElementById('chart-container').style.display = 'block';
       }
-      
-      // Check if the MLS exists in our data
-      const mlsExists = allData.some(item => item['MLS#'] === mlsId);
-      if (!mlsExists) {
-        alert(`MLS# ${mlsId} not found in database`);
-        return;
+
+      /**
+       * Hides the chart container.
+       */
+      function hideChartContainer() {
+        document.getElementById('chart-container').style.display = 'none';
       }
-      
-      // Check if we've reached the maximum number of items to compare
-      if (compareList.length >= maxCompareItems) {
-        alert(`You can compare up to ${maxCompareItems} properties at once`);
-        return;
+
+      /**
+       * Filters `selectedAreaData` based on current filter conditions.
+       * @returns {Array<Object>} - Filtered data array.
+       */
+      function getFilteredData() {
+        // In project_2.html, the main data is typically selectedAreaData.
+        // Overlay filtering logic is handled in createOverlayData.
+        // This function might not be directly used in project_2.html,
+        // as updateAnalyticsCharts directly processes selectedAreaData.
+        // However, for consistency, additional global filters can be added here if needed.
+        return selectedAreaData;
       }
-      
-      // Add to comparison list
-      compareList.push(mlsId);
-      saveCompareList();
-      updateCompareSelection();
-      
-      // Clear input
-      input.value = '';
-    }
 
-    // Update the comparison selection display
-    function updateCompareSelection() {
-      const selectionDiv = document.getElementById('compare-selection');
-      selectionDiv.innerHTML = '';
-      
-      // Create items for each MLS in the comparison list
-      compareList.forEach(mlsId => {
-        const item = document.createElement('div');
-        item.className = 'compare-item';
-        item.innerHTML = `${mlsId} <span class="compare-remove" onclick="removeFromCompare('${mlsId}')">×</span>`;
-        selectionDiv.appendChild(item);
-      });
-      
-      // Update button states
-      document.getElementById('start-compare').disabled = compareList.length < 2;
-      document.getElementById('clear-compare').disabled = compareList.length === 0;
-    }
+      /**
+       * Parses a date string into a Date object.
+       * Supports "DD.MM.YYYY" and "MM/DD/YYYY" formats.
+       * @param {string} dateStr - The date string.
+       * @returns {Date|null} - The parsed Date object or null.
+       */
+      function parseDate(dateStr) {
+        if (!dateStr) return null;
+        let parsedDate = null;
 
-    // Remove an MLS from the comparison list
-    function removeFromCompare(mlsId) {
-      compareList = compareList.filter(id => id !== mlsId);
-      saveCompareList();
-      updateCompareSelection();
-    }
-
-    // Save comparison list to localStorage
-    function saveCompareList() {
-      localStorage.setItem('compareList', JSON.stringify(compareList));
-    }
-
-    // Start the comparison process
-    function startCompare() {
-      if (compareList.length < 2) {
-        alert('Please select at least 2 properties to compare');
-        return;
+        // Try to parse DD.MM.YYYY format (e.g., 26.03.2024)
+        if (dateStr.includes('.')) {
+          const parts = dateStr.split('.');
+          if (parts.length === 3) {
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1; // Month is 0-indexed
+            const year = parseInt(parts[2], 10);
+            parsedDate = new Date(year, month, day);
+          }
+        }        
+        
+        if (parsedDate && !isNaN(parsedDate.getTime())) {
+          return parsedDate;
+        } else {
+          console.warn('Could not parse date string:', dateStr);
+          return null;
+        }
       }
-      
-      // Create a URL with the selected MLS numbers
-      const compareUrl = 'comparison.html?mls=' + compareList.join(',');
-      
-      // Open comparison page in a new tab
-      window.open(compareUrl, '_blank');
-    }
 
-    // Clear all items from the comparison list
-    function clearCompare() {
-      compareList = [];
-      saveCompareList();
-      updateCompareSelection();
-    }
+      /**
+       * Processes raw property data, aggregating it into average price and DOM data for charts.
+       * @param {Array<Object>} data - Array of raw property data.
+       * @returns {Array<Object>} - Aggregated chart data.
+       */
+      function processDataForCharts(data) {
+        const processedData = {};
+        
+        data.forEach(item => {
+          // Parse date
+          const rentedDate = parseDate(item['Rented Date']);
+          
+          if (!rentedDate) {
+            console.warn('Could not parse rental date:', { rentedDate: item['Rented Date'], mlsId: item['ML#'] });
+            return;
+          }
+          
+          // Parse price - handle strings that may contain '$' or commas
+          let rentedPriceStr = item['Rented Price']?.toString() || '';
+          rentedPriceStr = rentedPriceStr.replace(/[$,\s]/g, ''); // Remove '$', commas, and spaces
+          let rentedPrice = parseFloat(rentedPriceStr);
+          
+          // Handle cases where a dot might be a thousands separator (e.g., 1.875 actually means 1875)
+          if (rentedPriceStr.includes('.') && rentedPriceStr.split('.')[1].length === 3) {
+              rentedPrice = parseFloat(rentedPriceStr.replace('.', ''));
+          } else {
+              rentedPrice = parseFloat(rentedPriceStr);
+          }
 
-    // Add a method to add current property to compare list
-    function addCurrentToCompare() {
-      const currentMls = document.getElementById('mls').textContent;
-      if (currentMls && currentMls !== ' - ' && currentMls !== 'N/A') {
-        // Check if already in list
-        if (compareList.includes(currentMls)) {
-          alert(`MLS# ${currentMls} is already in your comparison list`);
+          // Parse ADOM (Average Days on Market)
+          const dom = parseInt(item['ADOM'], 10);
+          
+          // Check if parsed numerical values are valid
+          if (isNaN(rentedPrice) || rentedPrice <= 0 || isNaN(dom)) {
+            console.warn('Invalid/failed to parse rental price or DOM:', {
+              originalPrice: item['Rented Price'],
+              processedPrice: rentedPrice,
+              originalDOM: item['ADOM'],
+              processedDOM: dom,
+              mlsId: item['ML#']
+            });
+            return;
+          }
+          
+          let timeKey;
+          if (currentTimeframe === 'year') {
+            timeKey = rentedDate.getFullYear().toString();
+          } else if (currentTimeframe === 'month' && selectedYear) {
+            if (rentedDate.getFullYear() === selectedYear) {
+              timeKey = (rentedDate.getMonth() + 1).toString(); // Month is 1-indexed
+            } else {
+              return; // Skip data not in the selected year
+            }
+          } else {
+            return; // Data not matching the time frame
+          }
+          
+          if (!processedData[timeKey]) {
+            processedData[timeKey] = {
+              prices: [],
+              doms: [],
+              count: 0
+            };
+          }
+          
+          processedData[timeKey].prices.push(rentedPrice);
+          processedData[timeKey].doms.push(dom);
+          processedData[timeKey].count++;
+        });
+        
+        // Calculate averages and sort
+        const result = [];
+        Object.keys(processedData).sort((a, b) => parseInt(a) - parseInt(b)).forEach(key => {
+          const data = processedData[key];
+          const avgPrice = data.prices.reduce((sum, price) => sum + price, 0) / data.prices.length;
+          const avgDOM = data.doms.reduce((sum, dom) => sum + dom, 0) / data.doms.length;
+          
+          result.push({
+            period: key,
+            avgPrice: Math.round(avgPrice),
+            avgDOM: Math.round(avgDOM),
+            count: data.count
+          });
+        });
+        
+        return result;
+      }
+
+      /**
+       * Updates the analytics charts.
+       * Processes main data and all overlay data, then calls redrawCharts to draw.
+       */
+      function updateAnalyticsCharts() {
+        // 1. Process main data (data within the selected area, without overlay filters applied)
+        let mainChartData = processDataForCharts(selectedAreaData);
+
+        // 2. Process overlay data
+        // The allChartData object will contain 'main' data and all 'overlay-X' data
+        let allChartData = { 'main': mainChartData }; 
+        chartOverlays.forEach((overlay) => { // Iterate through chartOverlays
+          // Regenerate data for each overlay to ensure correct data when time frame changes
+          overlay.data = createOverlayData(overlay.filters); 
+          allChartData[`overlay-${overlay.id}`] = overlay.data; // Use overlay.id as key
+        });
+
+        console.log('All chart data (including overlays):', allChartData);
+
+        // Check if there is any data to display (at least one dataset is not empty)
+        const hasAnyData = Object.values(allChartData).some(dataset => dataset.length > 0);
+
+        if (!hasAnyData) {
+          d3.select("#price-chart").html('<div style="text-align: center; padding: 50px; color: #666;">No data available. Please try adjusting filters or selection area.</div>');
+          d3.select("#dom-chart").html('<div style="text-align: center; padding: 50px; color: #666;">No data available. Please try adjusting filters or selection area.</div>');
           return;
         }
         
-        // Check if we've reached the maximum
-        if (compareList.length >= maxCompareItems) {
-          alert(`You can compare up to ${maxCompareItems} properties at once`);
+        // Update chart titles
+        const timeLabel = currentTimeframe === 'year' ? 'Year' : `Month (${selectedYear})`;
+        document.getElementById('price-chart-title').textContent = `Average Rented Price (${timeLabel}) - Comparison`;
+        document.getElementById('dom-chart-title').textContent = `Average Days on Market (${timeLabel}) - Comparison`;
+        
+        // Call redrawCharts to draw all chart layers
+        redrawCharts(allChartData);
+      }
+
+      /**
+       * Redraws all chart layers (main data and overlays).
+       * @param {Object} allChartData - Object containing all data layers.
+       */
+      function redrawCharts(allChartData) {
+        // Clear existing charts
+        d3.select("#price-chart").selectAll("*").remove();
+        d3.select("#dom-chart").selectAll("*").remove();
+
+        // Draw price chart (line chart)
+        drawOverlayLineChart({
+          data: allChartData,
+          element: '#price-chart',
+          xKey: 'period',
+          yKey: 'avgPrice',
+          yAxisLabel: 'Average Rented Price ($)',
+          timeframe: currentTimeframe,
+          onClick: timeframeClickHandler,
+          colors: overlayColors // Pass color array
+        });
+
+        // Draw DOM chart (bar chart)
+        drawOverlayBarChart({
+          data: allChartData,
+          element: '#dom-chart',
+          xKey: 'period',
+          yKey: 'avgDOM',
+          yAxisLabel: 'Average Days on Market (Days)',
+          timeframe: currentTimeframe,
+          onClick: timeframeClickHandler,
+          colors: overlayColors // Pass color array
+        });
+
+        updateChartLegend(); // Update legend
+      }
+
+      /**
+       * Handles click events for time frame switching.
+       * @param {string} period - The clicked period (year or month).
+       */
+      function timeframeClickHandler(period) {
+        if (currentTimeframe === 'year') {
+          selectedYear = parseInt(period);
+          currentTimeframe = 'month';
+          // Recalculate monthly data for all overlays as selectedYear has changed
+          chartOverlays.forEach(ovl => {
+            ovl.data = createOverlayData(ovl.filters);
+          });
+          updateAnalyticsCharts(); // Update charts again
+        }
+      }
+
+      /**
+       * Draws a multi-layer line chart (for Rented Price).
+       * @param {Object} options - Object containing chart settings.
+       */
+      function drawOverlayLineChart(options) {
+        const { data, element, xKey, yKey, yAxisLabel, timeframe, onClick, colors } = options;
+        
+        const container = d3.select(element);
+        const containerRect = container.node().getBoundingClientRect();
+        const margin = {top: 20, right: 30, bottom: 60, left: 100};
+        const width = containerRect.width - margin.left - margin.right;
+        const height = 400 - margin.top - margin.bottom;
+        
+        const svg = container
+          .append("svg")
+          .attr("width", width + margin.left + margin.right)
+          .attr("height", height + margin.top + margin.bottom);
+        
+        const g = svg.append("g")
+          .attr("transform", `translate(${margin.left},${margin.top})`);
+        
+        // Get all periods across all datasets (X-axis domain)
+        const allPeriods = [...new Set(Object.values(data).flatMap(dataset => dataset.map(d => d[xKey])))].sort((a, b) => parseInt(a) - parseInt(b));
+        // Get value range across all datasets (Y-axis domain)
+        const allValues = Object.values(data).flatMap(dataset => dataset.map(d => d[yKey]));
+        
+        // Set scales
+        const xScale = d3.scalePoint()
+          .domain(allPeriods)
+          .range([0, width])
+          .padding(0.1);
+        
+        const yScale = d3.scaleLinear()
+          .domain(d3.extent(allValues)) // Use min/max from all data
+          .nice()
+          .range([height, 0]);
+        
+        // Add X-axis
+        g.append("g")
+          .attr("transform", `translate(0,${height})`)
+          .call(d3.axisBottom(xScale))
+          .append("text")
+          .attr("x", width / 2)
+          .attr("y", 45)
+          .attr("fill", "black")
+          .style("text-anchor", "middle")
+          .text(timeframe === 'year' ? 'Year' : 'Month');
+        
+        // Y-axis formatting - currency for price, plain for others
+        const yAxisFormat = yKey === 'avgPrice' ? 
+          d3.format("$,.0f") : d3.format(",.0f");
+        
+        // Add Y-axis
+        g.append("g")
+          .call(d3.axisLeft(yScale).tickFormat(yAxisFormat))
+          .append("text")
+          .attr("transform", "rotate(-90)")
+          .attr("y", -80)
+          .attr("x", -height / 2)
+          .attr("fill", "black")
+          .style("text-anchor", "middle")
+          .text(yAxisLabel);
+        
+        // Draw lines and data points for each dataset
+        for (const key in data) {
+          const dataset = data[key];
+          if (dataset.length === 0) continue; // Skip empty datasets
+
+          let currentOverlayLabel = 'Main Data';
+          let lineColor = colors[0]; // Default for Main Data
+          
+          if (key !== 'main') {
+              const overlay = chartOverlays.find(ovl => `overlay-${ovl.id}` === key);
+              if (overlay) {
+                  currentOverlayLabel = overlay.label;
+                  lineColor = overlay.color; // Use the fixed color from the overlay object
+              }
+          }
+
+          const line = d3.line()
+            .x(d => xScale(d[xKey]))
+            .y(d => yScale(d[yKey]))
+            .curve(d3.curveMonotoneX);
+          
+          g.append("path")
+            .datum(dataset)
+            .attr("fill", "none")
+            .attr("stroke", lineColor)
+            .attr("stroke-width", 3)
+            .attr("d", line);
+          
+          g.selectAll(`.dot-${key}`)
+            .data(dataset)
+            .enter().append("circle")
+            .attr("class", `dot-${key}`)
+            .attr("cx", d => xScale(d[xKey]))
+            .attr("cy", d => yScale(d[yKey]))
+            .attr("r", 6)
+            .attr("fill", lineColor)
+            .style("cursor", "pointer")
+            .on("click", function(event, d) {
+              if (timeframe === 'year') {
+                onClick(d.period); // Trigger time frame switch
+              }
+            })
+            .on("mouseover", function(event, d) {
+              const tooltip = d3.select("body").append("div")
+                .attr("class", "chart-tooltip")
+                .style("position", "absolute")
+                .style("background", "rgba(0,0,0,0.8)")
+                .style("color", "white")
+                .style("padding", "10px")
+                .style("border-radius", "4px")
+                .style("font-size", "12px")
+                .style("pointer-events", "none")
+                .style("z-index", "1000");
+              
+              const formattedValue = yKey === 'avgPrice' ? 
+                `$${d[yKey].toLocaleString()}` : d[yKey].toLocaleString();
+              
+              tooltip.html(`
+                <strong>${currentOverlayLabel}</strong><br/>
+                <strong>${timeframe === 'year' ? 'Year' : 'Month'}: ${d.period}</strong><br/>
+                ${yAxisLabel}: ${formattedValue}<br/>
+                Properties: ${d.count}
+                ${timeframe === 'year' ? '<br/><em>Click to view months</em>' : ''}
+              `)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 10) + "px");
+            })
+            .on("mouseout", function() {
+              d3.selectAll(".chart-tooltip").remove();
+            });
+        }
+      }
+
+      /**
+       * Draws a multi-layer bar chart (for Average Days on Market DOM).
+       * @param {Object} options - Object containing chart settings.
+       */
+      function drawOverlayBarChart(options) {
+        const { data, element, xKey, yKey, yAxisLabel, timeframe, onClick, colors } = options;
+        
+        const container = d3.select(element);
+        const containerRect = container.node().getBoundingClientRect();
+        const margin = {top: 20, right: 30, bottom: 60, left: 80};
+        const width = containerRect.width - margin.left - margin.right;
+        const height = 400 - margin.top - margin.bottom;
+        
+        const svg = container
+          .append("svg")
+          .attr("width", width + margin.left + margin.right)
+          .attr("height", height + margin.top + margin.bottom);
+        
+        const g = svg.append("g")
+          .attr("transform", `translate(${margin.left},${margin.top})`);
+        
+        // Get all periods across all datasets (X-axis domain)
+        const allPeriods = [...new Set(Object.values(data).flatMap(dataset => dataset.map(d => d[xKey])))].sort((a, b) => parseInt(a) - parseInt(b));
+        // Get value range across all datasets (Y-axis domain)
+        const allValues = Object.values(data).flatMap(dataset => dataset.map(d => d[yKey]));
+        
+        // Set scales
+        const xScale = d3.scaleBand()
+          .domain(allPeriods)
+          .range([0, width])
+          .padding(0.1);
+        
+        const yScale = d3.scaleLinear()
+          .domain([0, d3.max(allValues)]) // DOM starts from 0
+          .nice()
+          .range([height, 0]);
+        
+        // Sub-scale for grouping multiple overlays within the same period
+        const xSubScale = d3.scaleBand()
+          .domain(Object.keys(data).map((_, i) => i.toString())) // Use index as domain for sub-scale
+          .range([0, xScale.bandwidth()])
+          .padding(0.05);
+        
+        // Add X-axis
+        g.append("g")
+          .attr("transform", `translate(0,${height})`)
+          .call(d3.axisBottom(xScale))
+          .append("text")
+          .attr("x", width / 2)
+          .attr("y", 45)
+          .attr("fill", "black")
+          .style("text-anchor", "middle")
+          .text(timeframe === 'year' ? 'Year' : 'Month');
+        
+        // Add Y-axis
+        g.append("g")
+          .call(d3.axisLeft(yScale))
+          .append("text")
+          .attr("transform", "rotate(-90)")
+          .attr("y", -60)
+          .attr("x", -height / 2)
+          .attr("fill", "black")
+          .style("text-anchor", "middle")
+          .text(yAxisLabel);
+        
+        let currentOverlayIndex = 0; // Use a separate index for colors
+        // Draw bars for each dataset
+        for (const key in data) {
+          const dataset = data[key];
+          if (dataset.length === 0) continue; // Skip empty datasets
+
+          let currentOverlayLabel = 'Main Data';
+          let barColor = colors[0]; // Default for Main Data
+          
+          if (key !== 'main') {
+              const overlay = chartOverlays.find(ovl => `overlay-${ovl.id}` === key);
+              if (overlay) {
+                  currentOverlayLabel = overlay.label;
+                  barColor = overlay.color; // Use the fixed color from the overlay object
+              }
+          }
+
+          g.selectAll(`.bar-${key}`)
+            .data(dataset)
+            .enter().append("rect")
+            .attr("class", `bar-${key}`)
+            .attr("x", d => xScale(d[xKey]) + xSubScale(currentOverlayIndex.toString())) // Position using sub-scale
+            .attr("width", xSubScale.bandwidth()) // Set width using sub-scale
+            .attr("y", d => yScale(d[yKey]))
+            .attr("height", d => height - yScale(d[yKey]))
+            .attr("fill", barColor)
+            .style("cursor", "pointer")
+            .on("click", function(event, d) {
+              if (timeframe === 'year') {
+                onClick(d.period); // Trigger time frame switch
+              }
+            })
+            .on("mouseover", function(event, d) {
+              d3.select(this).attr("fill", d3.color(barColor).darker(0.5)); // Highlight effect
+              
+              const tooltip = d3.select("body").append("div")
+                .attr("class", "chart-tooltip")
+                .style("position", "absolute")
+                .style("background", "rgba(0,0,0,0.8)")
+                .style("color", "white")
+                .style("padding", "10px")
+                .style("border-radius", "4px")
+                .style("font-size", "12px")
+                .style("pointer-events", "none")
+                .style("z-index", "1000");
+              
+              tooltip.html(`
+                <strong>${currentOverlayLabel}</strong><br/>
+                <strong>${timeframe === 'year' ? 'Year' : 'Month'}: ${d.period}</strong><br/>
+                ${yAxisLabel}: ${d[yKey]} Days<br/>
+                Properties: ${d.count}
+                ${timeframe === 'year' ? '<br/><em>Click to view months</em>' : ''}
+              `)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 10) + "px");
+            })
+            .on("mouseout", function() {
+              d3.select(this).attr("fill", barColor); // Restore color
+              d3.selectAll(".chart-tooltip").remove(); // Remove tooltip
+            });
+          currentOverlayIndex++;
+        }
+      }
+
+      /**
+       * Creates data for an overlay based on filter conditions.
+       * @param {Object} filters - Filter conditions for the overlay.
+       * @returns {Array<Object>} - Processed overlay data.
+       */
+      function createOverlayData(filters) {
+        let filteredData = selectedAreaData; // Start filtering from the current selected area data
+        
+        // Apply overlay filters
+        if (filters.furnished) {
+          filteredData = filteredData.filter(item => item['Furnished'] === 'Furnished');
+        }
+        if (filters.fullBaths) {
+          filteredData = filteredData.filter(item => parseInt(item['Full Baths']) >= 1);
+        }
+        if (filters.halfBaths) {
+          filteredData = filteredData.filter(item => parseInt(item['Half baths']) >= 1);
+        }
+        if (filters.garage && filters.garage !== '') {
+          if (filters.garage === '2+') {
+            filteredData = filteredData.filter(item => parseInt(item['Garage']) >= 2);
+          } else {
+            filteredData = filteredData.filter(item => item['Garage'] === filters.garage);
+          }
+        }
+        if (filters.waterfront) {
+          filteredData = filteredData.filter(item => item['Waterfront Property (Y/N)'] === 'Yes');
+        }
+        if (filters.pool) {
+          filteredData = filteredData.filter(item => item['Pool YN'] === 'Yes');
+        }
+        
+        // Use processDataForCharts to process the filtered data
+        return processDataForCharts(filteredData);
+      }
+
+      /**
+       * Generates a label for an overlay based on filter conditions.
+       * @param {Object} filters - Filter conditions for the overlay.
+       * @returns {string} - Generated label string.
+       */
+      function generateOverlayLabel(filters) {
+        const labels = [];
+        if (filters.furnished) labels.push('Furnished');
+        if (filters.fullBaths) labels.push('Full Bath');
+        if (filters.halfBaths) labels.push('Half Bath');
+        if (filters.garage && filters.garage !== '') {
+          if (filters.garage === '0') labels.push('No Garage');
+          else if (filters.garage === '1') labels.push('1 Garage');
+          else if (filters.garage === '2') labels.push('2 Garages');
+          else if (filters.garage === '2+') labels.push('2+ Garages');
+          else labels.push(`${filters.garage} Garage`); // Fallback
+        }
+        if (filters.waterfront) labels.push('Waterfront');
+        if (filters.pool) labels.push('Pool');
+        
+        return labels.length > 0 ? labels.join(' + ') : 'All Properties';
+      }
+
+      /**
+       * Adds a new chart overlay.
+       */
+      function addChartOverlay() {
+        // Get current filter conditions from input fields
+        const filters = {
+          furnished: document.getElementById('new-furnished').checked,
+          fullBaths: document.getElementById('new-full-baths').checked,
+          halfBaths: document.getElementById('new-half-baths').checked,
+          garage: document.getElementById('new-garage').value,
+          waterfront: document.getElementById('new-waterfront').checked,
+          pool: document.getElementById('new-pool').checked
+        };
+        
+        // Check if at least one filter condition is selected
+        const hasFilters = Object.values(filters).some(value => 
+          value === true || (typeof value === 'string' && value !== '')
+        );
+        
+        if (!hasFilters) {
+          alert('Please select at least one filter condition');
           return;
         }
         
-        // Add to comparison list
-        compareList.push(currentMls);
-        saveCompareList();
-        updateCompareSelection();
+        // Create overlay data based on filters
+        const overlayData = createOverlayData(filters);
+        if (overlayData.length === 0) {
+          alert('No data found for selected filters');
+          return;
+        }
+        
+        // Assign color based on the unique ID, cycling through overlayColors (excluding index 0)
+        // This ensures a consistent color for a given overlay ID, even if others are removed.
+        const assignedColor = overlayColors[(overlayCounter % (overlayColors.length - 1)) + 1];
+
+        // Create new overlay object
+        const overlay = {
+          id: overlayCounter++, // Unique ID
+          label: generateOverlayLabel(filters), // Generate label based on filters
+          data: overlayData, // Overlay data
+          color: assignedColor, // Assign a persistent color based on its ID
+          filters: filters // Save filter conditions
+        };
+        
+        chartOverlays.push(overlay); // Add overlay to array
+        updateOverlayList(); // Update overlay list display
+        updateChartLegend(); // Update legend
+        updateAnalyticsCharts(); // Redraw charts to include new overlay
+        
+        resetOverlayControls(); // Reset overlay controls
       }
-    }
 
-    // Initialize comparison feature after page loads
-    document.addEventListener('DOMContentLoaded', function() {
-      initCompareFeature();
-    });
+      /**
+       * Updates the display of the overlay list.
+       */
+      function updateOverlayList() {
+        const listDiv = document.getElementById('overlay-list');
+        listDiv.innerHTML = ''; // Clear existing list
+        
+        chartOverlays.forEach(overlay => {
+          const overlayDiv = document.createElement('div');
+          overlayDiv.className = 'overlay-item';
+          // Removed data points display
+          overlayDiv.innerHTML = `
+            <div class="overlay-label" style="color: ${overlay.color};">${overlay.label}</div>
+            <div class="overlay-controls">
+              <button class="btn btn-danger btn-sm" onclick="removeOverlay(${overlay.id})">Remove</button>
+            </div>
+          `;
+          listDiv.appendChild(overlayDiv);
+        });
+      }
 
+      /**
+       * Updates the display of the chart legend.
+       */
+      function updateChartLegend() {
+        const legendDiv = document.getElementById('chart-legend');
+        legendDiv.innerHTML = ''; // Clear existing legend
+        
+        // Hide legend if no overlays
+        if (chartOverlays.length === 0) {
+          legendDiv.style.display = 'none';
+          return;
+        }
+        
+        legendDiv.style.display = 'flex'; // Show legend
+        
+        // Add legend item for main data
+        const mainLegendItem = document.createElement('div');
+        mainLegendItem.className = 'legend-item';
+        mainLegendItem.innerHTML = `
+          <div class="legend-color" style="background-color: ${overlayColors[0]};"></div>
+          <span>Main Data</span>
+        `;
+        legendDiv.appendChild(mainLegendItem);
 
+        // Add legend item for each overlay
+        chartOverlays.forEach((overlay) => { // Iterate directly over overlays
+          const legendItem = document.createElement('div');
+          legendItem.className = 'legend-item';
+          // Use the color assigned to the overlay object
+          const color = overlay.color; 
+          legendItem.innerHTML = `
+            <div class="legend-color" style="background-color: ${color};"></div>
+            <span>${overlay.label}</span>
+          `;
+          legendDiv.appendChild(legendItem);
+        });
+      }
 
-  </script>  
+      /**
+       * Removes an overlay.
+       * @param {number} overlayId - ID of the overlay to remove.
+       */
+      function removeOverlay(overlayId) {
+        chartOverlays = chartOverlays.filter(overlay => overlay.id !== overlayId);
+        updateOverlayList(); // Update overlay list
+        updateChartLegend(); // Update legend
+        updateAnalyticsCharts(); // Redraw charts
+      }
 
-</body>
+      /**
+       * Clears all overlays.
+       * Resets overlay counter and redraws charts.
+       */
+      function clearAllOverlays() {
+        chartOverlays = []; // Clear overlay array
+        overlayCounter = 1; // Reset counter
+        updateOverlayList(); // Update overlay list
+        updateChartLegend(); // Update legend
+        updateAnalyticsCharts(); // Redraw charts
+
+        // Additionally, reset selected markers on the map to blue
+        markerGroup.eachLayer(marker => {
+            marker.setIcon(L.icon({
+                iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34],
+                shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+                shadowSize: [41, 41]
+            }));
+        });
+        // Clear the drawn rectangle from the map
+        drawnItems.clearLayers();
+        // Hide the chart container
+        hideChartContainer();
+      }
+
+      /**
+       * Resets the input state of overlay controls.
+       */
+      function resetOverlayControls() {
+        document.getElementById('new-furnished').checked = false;
+        document.getElementById('new-full-baths').checked = false;
+        document.getElementById('new-half-baths').checked = false;
+        document.getElementById('new-garage').value = '';
+        document.getElementById('new-waterfront').checked = false;
+        document.getElementById('new-pool').checked = false;
+      }
+
+      // Add event listeners on DOMContentLoaded
+      document.addEventListener('DOMContentLoaded', function() {
+        // Reset Timeframe button
+        document.getElementById('reset-timeframe').addEventListener('click', function() {
+          currentTimeframe = 'year';
+          selectedYear = null;
+          updateAnalyticsCharts();
+        });
+
+        // Add Overlay button
+        document.getElementById('add-overlay').addEventListener('click', addChartOverlay);
+        // Clear All Overlays button
+        document.getElementById('clear-all-overlays').addEventListener('click', clearAllOverlays);
+      });
+    </script>
+
 </html>
+
